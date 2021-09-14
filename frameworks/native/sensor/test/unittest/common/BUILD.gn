@@ -14,7 +14,7 @@
 import("//build/test.gni")
 
 SUBSYSTEM_DIR = "//base/sensors"
-module_output_path = "sensors/sensors_sensor/frameworks/sensor"
+module_output_path = "sensors/sensor/frameworks/sensor"
 
 #######################################################
 ohos_unittest("SensorNativeCommonTest") {
@@ -24,18 +24,18 @@ ohos_unittest("SensorNativeCommonTest") {
 
   include_dirs = [
     "//foundation/appexecfwk/standard/interfaces/innerkits/libeventhandler/include",
-    "$SUBSYSTEM_DIR/sensors_sensor/interfaces/native/include",
-    "$SUBSYSTEM_DIR/sensors_sensor/utils/include",
-    "$SUBSYSTEM_DIR/sensors_sensor/services/sensor/include",
-    "$SUBSYSTEM_DIR/sensors_sensor/frameworks/native/sensor/include",
-    "$SUBSYSTEM_DIR/sensors_sensor/frameworks/native/common/include",
+    "$SUBSYSTEM_DIR/sensor/interfaces/native/include",
+    "$SUBSYSTEM_DIR/sensor/utils/include",
+    "$SUBSYSTEM_DIR/sensor/services/sensor/include",
+    "$SUBSYSTEM_DIR/sensor/frameworks/native/sensor/include",
+    "$SUBSYSTEM_DIR/sensor/frameworks/native/common/include",
     "//utils/native/base/include",
   ]
 
   deps = [
-    "$SUBSYSTEM_DIR/sensors_sensor/frameworks/native/sensor:libsensor_native",
-    "$SUBSYSTEM_DIR/sensors_sensor/services/sensor:libsensor_service",
-    "$SUBSYSTEM_DIR/sensors_sensor/utils:libsensor_utils",
+    "$SUBSYSTEM_DIR/sensor/frameworks/native/sensor:libsensor_native",
+    "$SUBSYSTEM_DIR/sensor/services/sensor:libsensor_service",
+    "$SUBSYSTEM_DIR/sensor/utils:libsensor_utils",
     "//third_party/googletest:gmock_main",
     "//third_party/googletest:gtest_main",
     "//utils/native/base:utils",
@@ -57,18 +57,18 @@ ohos_unittest("SensorDfxTest") {
 
   include_dirs = [
     "//foundation/appexecfwk/standard/interfaces/innerkits/libeventhandler/include",
-    "$SUBSYSTEM_DIR/sensors_sensor/interfaces/native/include",
-    "$SUBSYSTEM_DIR/sensors_sensor/utils/include",
-    "$SUBSYSTEM_DIR/sensors_sensor/services/sensor/include",
-    "$SUBSYSTEM_DIR/sensors_sensor/frameworks/native/sensor/include",
+    "$SUBSYSTEM_DIR/sensor/interfaces/native/include",
+    "$SUBSYSTEM_DIR/sensor/utils/include",
+    "$SUBSYSTEM_DIR/sensor/services/sensor/include",
+    "$SUBSYSTEM_DIR/sensor/frameworks/native/sensor/include",
     "//utils/native/base/include",
   ]
 
   deps = [
-    #"$SUBSYSTEM_DIR/sensors_sensor/adapter/frameworks:libsensor_fwk_adapter",
-    "$SUBSYSTEM_DIR/sensors_sensor/frameworks/native/sensor:libsensor_native",
-    "$SUBSYSTEM_DIR/sensors_sensor/services/sensor:libsensor_service",
-    "$SUBSYSTEM_DIR/sensors_sensor/utils:libsensor_utils",
+    #"$SUBSYSTEM_DIR/sensor/adapter/frameworks:libsensor_fwk_adapter",
+    "$SUBSYSTEM_DIR/sensor/frameworks/native/sensor:libsensor_native",
+    "$SUBSYSTEM_DIR/sensor/services/sensor:libsensor_service",
+    "$SUBSYSTEM_DIR/sensor/utils:libsensor_utils",
     "//third_party/googletest:gmock_main",
     "//third_party/googletest:gtest_main",
     "//utils/native/base:utils",
@@ -76,6 +76,7 @@ ohos_unittest("SensorDfxTest") {
 
   external_deps = [
     "hiviewdfx_hilog_native:libhilog",
+
     #"communication_L2:ipc_core",
     "ipc:ipc_core",
     "safwk:system_ability_fwk",

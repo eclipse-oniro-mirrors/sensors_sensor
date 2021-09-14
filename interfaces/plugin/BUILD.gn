@@ -13,7 +13,6 @@
 
 #import("//build/config/ohos/rules.gni")
 import("//build/ohos.gni")
-
 ohos_shared_library("sensor") {
   include_dirs = [
     "//third_party/node/src",
@@ -24,16 +23,16 @@ ohos_shared_library("sensor") {
     "./include",
   ]
   defines = [
-      "APP_LOG_TAG = \"sensroJs\"",
-      "LOG_DOMAIN = 0xD002700",
+    "APP_LOG_TAG = \"sensroJs\"",
+    "LOG_DOMAIN = 0xD002700",
   ]
   sources = [
     "./src/sensor_js.cpp",
     "./src/sensor_napi_utils.cpp",
   ]
   deps = [
-    "//foundation/ace/napi:ace_napi",
     "../native:sensor_interface_native",
+    "//foundation/ace/napi:ace_napi",
     "//utils/native/base:utils",
   ]
   external_deps = [ "hiviewdfx_hilog_native:libhilog" ]

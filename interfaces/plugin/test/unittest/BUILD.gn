@@ -14,16 +14,15 @@
 #import("//build/config/ohos/rules.gni")
 import("//build/ohos.gni")
 import("//build/test.gni")
-
-module_output_path = "sensors/sensors_sensor/interfaces"
+module_output_path = "sensors/sensor/interfaces"
 ohos_unittest("SensorJsTest") {
   module_out_path = module_output_path
 
   include_dirs = [
     "//third_party/node/src",
     "//native_engine",
-    "//base/sensors/sensors_sensor/interfaces/native/include",
-    "//base/sensors/sensors_sensor/interfaces/plugin/include",
+    "//base/sensors/sensor/interfaces/native/include",
+    "//base/sensors/sensor/interfaces/plugin/include",
     "//utils/native/base/include",
     "./include",
     "//third_party/libuv/include",
@@ -33,22 +32,20 @@ ohos_unittest("SensorJsTest") {
     "//foundation/ace/napi/native_engine/impl/quickjs",
   ]
   defines = [
-      "APP_LOG_TAG = \"sensroJs\"",
-      "LOG_DOMAIN = 0xD002700",
+    "APP_LOG_TAG = \"sensroJs\"",
+    "LOG_DOMAIN = 0xD002700",
   ]
-  sources = [
-    "sensor_js_test.cpp",
-  ]
+  sources = [ "sensor_js_test.cpp" ]
   deps = [
+    "//base/sensors/sensor/interfaces/native:sensor_interface_native",
+    "//base/sensors/sensor/interfaces/plugin:sensor",
     "//foundation/ace/napi:ace_napi",
-    "//base/sensors/sensors_sensor/interfaces/native:sensor_interface_native",
-    "//utils/native/base:utils",
     "//foundation/ace/napi/:ace_napi_quickjs",
     "//third_party/googletest:gtest",
     "//third_party/googletest:gtest_main",
     "//third_party/libuv:uv_static",
     "//third_party/quickjs:qjs",
-    "//base/sensors/sensors_sensor/interfaces/plugin:sensor"
+    "//utils/native/base:utils",
   ]
   external_deps = [ "hiviewdfx_hilog_native:libhilog" ]
   relative_install_dir = "module"

@@ -22,38 +22,38 @@ ohos_shared_library("libsensor_service") {
     "src/sensor_client_stub.cpp",
     "src/sensor_data_processer.cpp",
     "src/sensor_dump.cpp",
-    "src/sensor_service_impl.cpp",
     "src/sensor_manager.cpp",
     "src/sensor_service.cpp",
+    "src/sensor_service_impl.cpp",
     "src/sensor_service_stub.cpp",
   ]
 
   include_dirs = [
     "include",
-    "$SUBSYSTEM_DIR/sensors_sensor/frameworks/native/sensor/include",
-    "$SUBSYSTEM_DIR/sensors_sensor/interfaces/native/include",
+    "$SUBSYSTEM_DIR/sensor/frameworks/native/sensor/include",
+    "$SUBSYSTEM_DIR/sensor/interfaces/native/include",
     "//utils/native/base/include",
     "//utils/system/safwk/native/include",
-    "$SUBSYSTEM_DIR/sensors_sensor/utils/include",
-    "$SUBSYSTEM_DIR/sensors_sensor/services/sensor/include",
+    "$SUBSYSTEM_DIR/sensor/utils/include",
+    "$SUBSYSTEM_DIR/sensor/services/sensor/include",
     "//drivers/peripheral/sensor/interfaces/include",
   ]
 
   cflags = [ "-Wno-error=inconsistent-missing-override" ]
 
   deps = [
-    "$SUBSYSTEM_DIR/sensors_sensor/utils:libsensor_utils",
-    "//utils/native/base:utils",
+    "$SUBSYSTEM_DIR/sensor/utils:libsensor_utils",
     "//drivers/peripheral/sensor/hal:hdi_sensor",
+    "//utils/native/base:utils",
   ]
 
   external_deps = [
-    "appexecfwk_standard:appexecfwk_base",
-    "appexecfwk_standard:appexecfwk_core",
-    "hiviewdfx_hilog_native:libhilog",
-    "hisysevent_native:libhisysevent",
     "aafwk_standard:base",
     "aafwk_standard:intent",
+    "appexecfwk_standard:appexecfwk_base",
+    "appexecfwk_standard:appexecfwk_core",
+    "hisysevent_native:libhisysevent",
+    "hiviewdfx_hilog_native:libhilog",
     "ipc:ipc_core",
     "permission_standard:libpermissionsdk_standard",
     "safwk:system_ability_fwk",

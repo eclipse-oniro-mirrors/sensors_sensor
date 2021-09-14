@@ -13,7 +13,7 @@
 
 import("//build/ohos.gni")
 
-SUBSYSTEM_DIR = "//base/sensors/sensors_sensor"
+SUBSYSTEM_DIR = "//base/sensors/sensor"
 
 ##############################################
 ohos_ndk_library("libsensor_ndk") {

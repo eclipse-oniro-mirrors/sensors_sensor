@@ -35,7 +35,7 @@
 sensor导入模块的示例代码如下：
 
 ```
-/base/sensors/sensors_sensor
+/base/sensors/sensor
 ├── frameworks                 # 框架代码
 │   └── native                 # sensor客户端代码          
 ├── interfaces                 # 对外接口存放目录

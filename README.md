@@ -35,7 +35,7 @@ The following figure shows the sensor architecture.
 The sample code for importing the sensor module is as follows:
 
 ```
-/base/sensors/sensors_sensor
+/base/sensors/sensor
 ├── frameworks                 # Framework code
 │   └── native                 # Sensor client code
 ├── interfaces                 # External APIs

@@ -44,7 +44,7 @@ The sample code for importing the sensor module is as follows:
 ├── sa_profile                 # Configuration file of system ability names and dynamic libraries
 ├── services                   # Code of services
 │   └── sensor                 # Sensor service for reporting data about sensors, such as the acceleration and gyroscope sensors
-└── utils                      # Common code, including permissions and communication capabilities
+└── utils                      # Common code, including permissions and communication capabilities 
 ```
 
 ## Constraints<a name="section98068674513"></a>

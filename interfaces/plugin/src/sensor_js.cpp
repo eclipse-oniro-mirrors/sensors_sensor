@@ -103,8 +103,7 @@ static int32_t UnsubscribeSensor(int32_t sensorTypeId)
 
 static int32_t SubscribeSensor(int32_t sensorTypeId, int64_t interval, RecordSensorCallback callback)
 {
-    HiLog::Info(LABEL, "%{public}s in, sensorTypeId: %{public}d, interval: %{public}lld ", __func__,
-        sensorTypeId, interval);
+    HiLog::Info(LABEL, "%{public}s in, sensorTypeId: %{public}d", __func__, sensorTypeId,);
     int32_t ret = SubscribeSensor(sensorTypeId, &user);
     if (ret < 0) {
         HiLog::Error(LABEL, "%{public}s subscribeSensor failed", __func__);

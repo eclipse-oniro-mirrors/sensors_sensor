@@ -187,6 +187,8 @@ export default {
 
 ## Repositories Involved<a name="section96071132185310"></a>
 
+Pan-sensor subsystem
+
 **sensors\_sensor**
 
 [sensors\_miscdevice](https://gitee.com/openharmony/sensors_miscdevice)

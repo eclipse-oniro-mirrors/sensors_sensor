@@ -187,6 +187,8 @@ export default {
 
 ## 相关仓<a name="section96071132185310"></a>
 
+泛Sensor服务子系统
+
 **sensors\_sensor**
 
 [sensors\_miscdevice](https://gitee.com/openharmony/sensors_miscdevice)

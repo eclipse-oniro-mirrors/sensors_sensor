@@ -189,5 +189,5 @@ export default {
 
 **sensors\_sensor**
 
-[sensors\_miscdevice](https://gitee.com/openharmony/https://gitee.com/openharmony/sensors_miscdevice)
+[sensors\_miscdevice](https://gitee.com/openharmony/sensors_miscdevice)
 

@@ -82,7 +82,7 @@ bool SensorServiceClient::IsValidSensorId(uint32_t sensorId)
         return false;
     }
     for (auto &sensor : sensorList_) {
-        if (sensor.GetSensorList() == sensorId) {
+        if (sensor.GetSensorId() == sensorId) {
             return true;
         }
     }
@@ -93,7 +93,7 @@ int32_t SensorServiceClient::EnableSensor(uint32_t sensorId, int64_t samplingPer
 {
     HiLog::Debug(LABEL, "%{public}s begin", __func__);
     if (!IsValidSensorId(sensorId)) {
-        HiLog::Error(LABEL, "%{public}s sensorList_ cannot be empty", __func__);
+        HiLog::Error(LABEL, "%{public}s sensorId is invalid", __func__);
         return SENSOR_NATIVE_SAM_ERR;
     }
     int32_t ret = InitServiceClient();
@@ -112,7 +112,7 @@ int32_t SensorServiceClient::DisableSensor(uint32_t sensorId)
 {
     HiLog::Debug(LABEL, "%{public}s begin", __func__);
     if (!IsValidSensorId(sensorId)) {
-        HiLog::Error(LABEL, "%{public}s sensorList_ cannot be empty", __func__);
+        HiLog::Error(LABEL, "%{public}s sensorId is invalid", __func__);
         return SENSOR_NATIVE_SAM_ERR;
     }
     int32_t ret = InitServiceClient();
@@ -131,7 +131,7 @@ int32_t SensorServiceClient::RunCommand(uint32_t sensorId, int32_t cmdType, int3
 {
     HiLog::Debug(LABEL, "%{public}s begin", __func__);
     if (!IsValidSensorId(sensorId)) {
-        HiLog::Error(LABEL, "%{public}s sensorList_ cannot be empty", __func__);
+        HiLog::Error(LABEL, "%{public}s sensorId is invalid", __func__);
         return SENSOR_NATIVE_SAM_ERR;
     }
     int32_t ret = InitServiceClient();

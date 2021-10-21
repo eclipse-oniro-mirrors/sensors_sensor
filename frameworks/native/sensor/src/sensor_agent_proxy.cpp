@@ -204,7 +204,7 @@ int32_t SensorAgentProxy::DeactivateSensor(int32_t sensorId, const SensorUser *u
         return OHOS::Sensors::ERROR;
     }
     if ((g_subscribeMap.find(sensorId) == g_subscribeMap.end()) || (g_subscribeMap[sensorId] != user)) {
-        HiLog::Error(LABEL, "%{public}s unsubscribe sensorId first", __func__);
+        HiLog::Error(LABEL, "%{public}s subscribe sensorId first", __func__);
         return OHOS::Sensors::ERROR;
     }
     g_subscribeMap.erase(sensorId);
@@ -263,7 +263,7 @@ int32_t SensorAgentProxy::UnsubscribeSensor(int32_t sensorId, const SensorUser *
     }
 
     if (g_unsubscribeMap.find(sensorId) == g_unsubscribeMap.end() || g_unsubscribeMap[sensorId] != user) {
-        HiLog::Error(LABEL, "%{public}s unsubscribe sensorId first", __func__);
+        HiLog::Error(LABEL, "%{public}s deactivate sensorId first", __func__);
         return OHOS::Sensors::ERROR;
     }
 

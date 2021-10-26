@@ -126,6 +126,10 @@ void SensorAgentProxy::HandleSensorData(struct SensorEvent *events, int32_t num,
     struct SensorEvent eventStream;
     for (int32_t i = 0; i < num; ++i) {
         eventStream = events[i];
+        float *data = (float*)eventStream.data;
+        if (eventStream.sensorTypeId == 1 || eventStream.sensorTypeId == 2 || eventStream.sensorTypeId == 6) {
+            HiLog::Error(LABEL, "%{public}s data x: %{public}f, y: %{public}f, z: %{public}f", __func__, (*data), *(data + 1), *(data + 2));
+        }
         if (eventStream.data == nullptr || g_subscribeMap[eventStream.sensorTypeId] == nullptr) {
             HiLog::Error(LABEL, "%{public}s data or sensorUser is nullptr", __func__);
             return;
@@ -192,6 +196,7 @@ int32_t SensorAgentProxy::ActivateSensor(int32_t sensorId, const SensorUser *use
     g_reportInterval = -1;
     if (ret != 0) {
         HiLog::Error(LABEL, "%{public}s enable sensor failed, ret: %{public}d", __func__, ret);
+        g_subscribeMap.erase(sensorId);
         return OHOS::Sensors::ERROR;
     }
     return OHOS::Sensors::SUCCESS;

@@ -148,8 +148,8 @@ void EmitAsyncCallbackWork(AsyncCallbackInfo *asyncCallbackInfo)
     HiLog::Debug(LABEL, "%{public}s end", __func__);
 }
 
-
-void EmitUvEventLoop(AsyncCallbackInfo *asyncCallbackInfo) {
+void EmitUvEventLoop(AsyncCallbackInfo *asyncCallbackInfo)
+{
     uv_loop_s *loop(nullptr);
     HiLog::Error(LABEL, "%{public}s env: %{public}p", __func__, asyncCallbackInfo->env);
     napi_get_uv_event_loop(asyncCallbackInfo->env, &loop);

@@ -32,7 +32,8 @@ constexpr int32_t RECEIVE_DATA_SIZE = 100;
 
 MyFileDescriptorListener::MyFileDescriptorListener()
     :channel_(nullptr),
-     receiveDataBuff_(new (std::nothrow) TransferSensorEvents[sizeof(struct TransferSensorEvents) * RECEIVE_DATA_SIZE])
+     receiveDataBuff_(
+        new (std::nothrow) TransferSensorEvents[sizeof(struct TransferSensorEvents) * RECEIVE_DATA_SIZE])
 {}
 
 void MyFileDescriptorListener::OnReadable(int32_t fileDescriptor)

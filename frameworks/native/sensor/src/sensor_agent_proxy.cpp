@@ -274,7 +274,7 @@ int32_t SensorAgentProxy::UnsubscribeSensor(int32_t sensorId, const SensorUser *
         HiLog::Error(LABEL, "%{public}s deactivate sensorId first", __func__);
         return OHOS::Sensors::ERROR;
     }
-    if (g_subscribeMap.empty()) {        
+    if (g_subscribeMap.empty()) {
         int32_t ret = DestroySensorDataChannel();
         if (ret != ERR_OK) {
             HiLog::Error(LABEL, "%{public}s destory data channel fail, ret : %{public}d", __func__, ret);

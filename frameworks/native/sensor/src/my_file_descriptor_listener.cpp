@@ -46,9 +46,11 @@ void MyFileDescriptorListener::OnReadable(int32_t fileDescriptor)
 
     FileDescriptorListener::OnReadable(fileDescriptor);
     if (receiveDataBuff_ == nullptr) {
-        receiveDataBuff_ = new (std::nothrow) TransferSensorEvents[sizeof(struct TransferSensorEvents) * RECEIVE_DATA_SIZE];
+        receiveDataBuff_ =
+            new (std::nothrow) TransferSensorEvents[sizeof(struct TransferSensorEvents) * RECEIVE_DATA_SIZE];
     }
-    int32_t len = recv(fileDescriptor, receiveDataBuff_, sizeof(struct TransferSensorEvents) * RECEIVE_DATA_SIZE, NULL);
+    int32_t len =
+        recv(fileDescriptor, receiveDataBuff_, sizeof(struct TransferSensorEvents) * RECEIVE_DATA_SIZE, NULL);
     int32_t eventSize = sizeof(struct TransferSensorEvents);
     while (len > 0) {
         int32_t num = len / eventSize;

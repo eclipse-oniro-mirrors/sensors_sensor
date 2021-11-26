@@ -14,10 +14,6 @@
  */
 
 #include "my_file_descriptor_listener.h"
-#include <cstring>
-#include <sstream>
-#include <unistd.h>
-#include <vector>
 #include "sensors_log_domain.h"
 
 namespace OHOS {

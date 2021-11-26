@@ -50,7 +50,7 @@ void MyFileDescriptorListener::OnReadable(int32_t fileDescriptor)
             new (std::nothrow) TransferSensorEvents[sizeof(struct TransferSensorEvents) * RECEIVE_DATA_SIZE];
     }
     int32_t len =
-        recv(fileDescriptor, receiveDataBuff_, sizeof(struct TransferSensorEvents) * RECEIVE_DATA_SIZE, NULL);
+        recv(fileDescriptor, receiveDataBuff_, sizeof(struct TransferSensorEvents) * RECEIVE_DATA_SIZE, 0);
     int32_t eventSize = sizeof(struct TransferSensorEvents);
     while (len > 0) {
         int32_t num = len / eventSize;
@@ -66,7 +66,7 @@ void MyFileDescriptorListener::OnReadable(int32_t fileDescriptor)
             };
             channel_->dataCB_(&event, 1, channel_->privateData_);
         }
-        len = recv(fileDescriptor, receiveDataBuff_, sizeof(struct TransferSensorEvents) * RECEIVE_DATA_SIZE, NULL);
+        len = recv(fileDescriptor, receiveDataBuff_, sizeof(struct TransferSensorEvents) * RECEIVE_DATA_SIZE, 0);
     }
 }
 

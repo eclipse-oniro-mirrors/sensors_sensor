@@ -192,8 +192,8 @@ void EmitUvEventLoop(AsyncCallbackInfo *asyncCallbackInfo)
             napi_get_undefined(env, &result[1]); 
         } else {
             int32_t sensorTypeId = asyncCallbackInfo->sensorData.sensorTypeId;
-            if (g_sensorAttributeList.count(sensorTypeId) == 0
-                || g_sensorAttributeList[sensorTypeId].size() != asyncCallbackInfo->sensorData.dataLength / 4) {
+            if ((g_sensorAttributeList.count(sensorTypeId)) == 0 || (g_sensorAttributeList[sensorTypeId].size()
+                != (asyncCallbackInfo->sensorData.dataLength / sizeof(uint8_t)))) {
                 HiLog::Error(LABEL, "%{public}s count of sensorTypeId is zero", __func__);
                 return;
             }

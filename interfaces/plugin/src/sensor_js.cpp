@@ -52,7 +52,6 @@ static void DataCallbackImpl(SensorEvent *event)
             onCallbackInfo.second->sensorData.sensorTypeId = sensorTypeId;
             onCallbackInfo.second->sensorData.dataLength = event->dataLen;
             onCallbackInfo.second->sensorData.timestamp = event->timestamp;
-            HiLog::Error(LABEL, "%{public}s event is null!, time: %{public}lld", __func__, event->timestamp);
             if (memcpy_s(onCallbackInfo.second->sensorData.data, event->dataLen, data, event->dataLen) != EOK) {
                 HiLog::Error(LABEL, "%{public}s copy data failed", __func__);
                 return;

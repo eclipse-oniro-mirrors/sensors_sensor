@@ -36,9 +36,7 @@
 #include "sensor_napi_utils.h"
 
 using namespace OHOS::HiviewDFX;
-namespace{
 static constexpr HiLogLabel LABEL = {LOG_CORE, 0xD002708, "SensorJsAPI"};
-}
 
 static std::map<int32_t, struct AsyncCallbackInfo*> g_onceCallbackInfos;
 static std::map<int32_t, struct AsyncCallbackInfo*> g_onCallbackInfos;
@@ -256,7 +254,7 @@ static napi_value Off(napi_env env, napi_callback_info info)
     }
     EmitAsyncCallbackWork(asyncCallbackInfo);
     return nullptr;
-} 
+}
 
 static napi_value GetGeomagneticField(napi_env env, napi_callback_info info)
 {

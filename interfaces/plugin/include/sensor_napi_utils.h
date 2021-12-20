@@ -23,8 +23,6 @@
 
 using std::vector;
 using std::string;
-#define EVENT_INVALID_PARAMETER (-1);
-#define EVENT_OK 0;
 
 const int32_t THREE_DIMENSIONAL_MATRIX_LENGTH = 9;
 const int32_t FOUR_DIMENSIONAL_MATRIX_LENGTH = 16;
@@ -66,7 +64,7 @@ struct BusinessError {
     string stack;
 };
 
-typedef enum CallbackDataType{
+typedef enum CallbackDataType {
     FAIL = -1,
     OFF_CALLBACK = 0,
     ON_CALLBACK = 1,

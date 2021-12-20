@@ -23,9 +23,7 @@
 #include "hilog/log.h"
 
 using namespace OHOS::HiviewDFX;
-namespace{
 static constexpr HiLogLabel LABEL = {LOG_CORE, 0xD002708, "SensorJsAPI"};
-}
 
 bool IsMatchType(napi_env env, napi_value value, napi_valuetype type)
 {
@@ -265,9 +263,9 @@ void ConvertToRotationMatrix(napi_env env, AsyncCallbackInfo *asyncCallbackInfo,
     napi_get_undefined(env, &result[0]);
     napi_create_object(env, &result[1]);
     napi_value rotation = nullptr;
-    CreateNapiArray(env, asyncCallbackInfo->data.rationMatrixData.rotationMatrix, 9, rotation);
+    CreateNapiArray(env, asyncCallbackInfo->data.rationMatrixData.rotationMatrix, THREE_DIMENSIONAL_MATRIX_LENGTH, rotation);
     napi_value inclination = nullptr;
-    CreateNapiArray(env, asyncCallbackInfo->data.rationMatrixData.inclinationMatrix, 9, inclination);
+    CreateNapiArray(env, asyncCallbackInfo->data.rationMatrixData.inclinationMatrix, THREE_DIMENSIONAL_MATRIX_LENGTH, inclination);
     napi_set_named_property(env, result[1], "rotation", rotation);
     napi_set_named_property(env, result[1], "inclination", inclination);
 }

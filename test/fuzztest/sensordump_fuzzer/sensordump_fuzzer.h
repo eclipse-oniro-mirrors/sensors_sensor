@@ -1,3 +1,6 @@
+#ifndef SENSORDUMP_FUZZER_H
+#define SENSORDUMP_FUZZER_H
+
 /*
  * Copyright (c) 2021 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,3 +25,4 @@
 
 #define FUZZ_PROJECT_NAME "sensordump_fuzzer"
 
+#endif // SENSORDUMP_FUZZER_H

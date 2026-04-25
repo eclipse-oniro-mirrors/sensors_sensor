@@ -17,6 +17,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "accesstoken_kit.h"
 #include "nativetoken_kit.h"
@@ -35,7 +36,27 @@ namespace Sensors {
 using namespace Security::AccessToken;
 namespace {
 constexpr size_t U32_AT_SIZE = 4;
-} // namespace
+constexpr int32_t DEFAULT_PID1 = 1001;
+constexpr int32_t DEFAULT_PID2 = 1002;
+constexpr int32_t DEFAULT_UID1 = 2001;
+constexpr int32_t DEFAULT_UID2 = 2002;
+constexpr int32_t DEFAULT_DEVICE_ID = 0;
+constexpr int32_t DEFAULT_SENSOR_ID = 0;
+constexpr int32_t DEFAULT_LOCATION = 1;
+constexpr int32_t PEDOMETER_DETECTION_TYPE = 22;
+constexpr int32_t UNKNOWN_PID1 = 99999;
+constexpr int32_t UNKNOWN_PID2 = 99998;
+constexpr int32_t UNKNOWN_PID3 = 99997;
+constexpr int64_t MIN_SAMPLE_PERIOD_NS = 100000;
+
+struct SensorPowerPolicyFuzzInput {
+    int32_t pid1 = 0;
+    int32_t pid2 = 0;
+    int32_t sensorType = 0;
+    int64_t samplingPeriodNs = 0;
+    int64_t maxReportDelayNs = 0;
+    int32_t sensorId2 = 0;
+};
 
 template<class T>
 size_t GetObject(T &object, const uint8_t *data, size_t size)
@@ -49,6 +70,30 @@ size_t GetObject(T &object, const uint8_t *data, size_t size)
         return 0;
     }
     return objectSize;
+}
+
+void ReadFuzzInput(const uint8_t *data, size_t size, SensorPowerPolicyFuzzInput &input)
+{
+    size_t startPos = 0;
+    startPos += GetObject<int32_t>(input.pid1, data + startPos, size - startPos);
+    startPos += GetObject<int32_t>(input.pid2, data + startPos, size - startPos);
+    startPos += GetObject<int32_t>(input.sensorType, data + startPos, size - startPos);
+    startPos += GetObject<int64_t>(input.samplingPeriodNs, data + startPos, size - startPos);
+    startPos += GetObject<int64_t>(input.maxReportDelayNs, data + startPos, size - startPos);
+    startPos += GetObject<int32_t>(input.sensorId2, data + startPos, size - startPos);
+}
+
+void NormalizeInput(SensorPowerPolicyFuzzInput &input)
+{
+    if (input.pid1 <= 0) {
+        input.pid1 = DEFAULT_PID1;
+    }
+    if (input.pid2 <= 0) {
+        input.pid2 = DEFAULT_PID2;
+    }
+    if (input.samplingPeriodNs <= 0) {
+        input.samplingPeriodNs = MIN_SAMPLE_PERIOD_NS;
+    }
 }
 
 void SetUpTestCase()
@@ -75,175 +120,130 @@ void SetUpTestCase()
     delete[] perms;
 }
 
-bool SensorPowerPolicyFuzzTest(const uint8_t *data, size_t size)
+sptr<SensorBasicDataChannel> CreateChannel(ClientInfo &clientInfo, int32_t pid)
 {
-    SetUpTestCase();
-    size_t startPos = 0;
-
-    int32_t pid1 = 0;
-    startPos += GetObject<int32_t>(pid1, data + startPos, size - startPos);
-    int32_t pid2 = 0;
-    startPos += GetObject<int32_t>(pid2, data + startPos, size - startPos);
-    int32_t sensorType = 0;
-    startPos += GetObject<int32_t>(sensorType, data + startPos, size - startPos);
-    int64_t samplingPeriodNs = 0;
-    startPos += GetObject<int64_t>(samplingPeriodNs, data + startPos, size - startPos);
-    int64_t maxReportDelayNs = 0;
-    startPos += GetObject<int64_t>(maxReportDelayNs, data + startPos, size - startPos);
-    int32_t sensorId2 = 0;
-    startPos += GetObject<int32_t>(sensorId2, data + startPos, size - startPos);
-
-    // Ensure valid pids for testing
-    if (pid1 <= 0) {
-        pid1 = 1001;
+    sptr<SensorBasicDataChannel> channel = new (std::nothrow) SensorBasicDataChannel();
+    if (channel != nullptr) {
+        channel->CreateSensorBasicChannel();
+        channel->SetSensorStatus(true);
+        clientInfo.UpdateSensorChannel(pid, channel);
     }
-    if (pid2 <= 0) {
-        pid2 = 1002;
-    }
-    if (samplingPeriodNs <= 0) {
-        samplingPeriodNs = 100000;
-    }
+    return channel;
+}
 
-    SensorPowerPolicy &powerPolicy = SensorPowerPolicy::GetInstance();
-    ClientInfo &clientInfo = ClientInfo::GetInstance();
+void PrepareClientInfoState(ClientInfo &clientInfo, const SensorPowerPolicyFuzzInput &input,
+    const SensorDescription &sensorDesc1, const SensorDescription &sensorDescPedometer,
+    const SensorDescription &sensorDesc2, const SensorBasicInfo &sensorInfo)
+{
+    clientInfo.UpdateAppThreadInfo(input.pid1, DEFAULT_UID1, 0);
+    (void)CreateChannel(clientInfo, input.pid1);
+    clientInfo.UpdateSensorInfo(sensorDesc1, input.pid1, sensorInfo);
+    clientInfo.UpdateSensorInfo(sensorDescPedometer, input.pid1, sensorInfo);
 
-    SensorDescription sensorDesc1 {0, sensorType, 0, 1};
-    // PEDOMETER type to test CheckFreezingSensor path
-    SensorDescription sensorDescPedometer {0, 22, 0, 1};  // SENSOR_TYPE_ID_PEDOMETER_DETECTION
-    SensorDescription sensorDesc2 {0, sensorType + 1, sensorId2, 1};
+    clientInfo.UpdateAppThreadInfo(input.pid2, DEFAULT_UID2, 0);
+    (void)CreateChannel(clientInfo, input.pid2);
+    clientInfo.UpdateSensorInfo(sensorDesc1, input.pid2, sensorInfo);
+    clientInfo.UpdateSensorInfo(sensorDesc2, input.pid2, sensorInfo);
+}
 
-    // Setup: register pid1 with sensor subscriptions
-    clientInfo.UpdateAppThreadInfo(pid1, 2001, 0);
-    sptr<SensorBasicDataChannel> channel1 = new (std::nothrow) SensorBasicDataChannel();
-    if (channel1 != nullptr) {
-        channel1->CreateSensorBasicChannel();
-        channel1->SetSensorStatus(true);
-        clientInfo.UpdateSensorChannel(pid1, channel1);
-    }
+void RunActiveInfoTests(SensorPowerPolicy &powerPolicy, int32_t pid1, int32_t pid2)
+{
+    (void)powerPolicy.GetActiveInfoList(pid1);
+    (void)powerPolicy.GetActiveInfoList(pid2);
+    (void)powerPolicy.GetActiveInfoList(UNKNOWN_PID1);
+}
 
-    SensorBasicInfo sensorInfo;
-    sensorInfo.SetSamplingPeriodNs(samplingPeriodNs);
-    sensorInfo.SetMaxReportDelayNs(maxReportDelayNs);
-    sensorInfo.SetSensorState(true);
+void RunSuspendResumeTests(SensorPowerPolicy &powerPolicy, int32_t pid1, int32_t pid2)
+{
+    powerPolicy.SuspendSensors(pid1);
+    powerPolicy.SuspendSensors(pid1);
+    powerPolicy.SuspendSensors(pid2);
+    powerPolicy.SuspendSensors(UNKNOWN_PID1);
+    powerPolicy.ResumeSensors(pid1);
+    powerPolicy.ResumeSensors(pid2);
+    powerPolicy.ResumeSensors(UNKNOWN_PID2);
+}
+
+void RunResetAndReportTests(SensorPowerPolicy &powerPolicy, ClientInfo &clientInfo,
+    const SensorDescription &sensorDesc1, const SensorBasicInfo &sensorInfo,
+    int32_t pid1, int32_t pid2, int32_t sensorType, int64_t samplingPeriodNs, int64_t maxReportDelayNs)
+{
     clientInfo.UpdateSensorInfo(sensorDesc1, pid1, sensorInfo);
-    clientInfo.UpdateSensorInfo(sensorDescPedometer, pid1, sensorInfo);
-
-    // Setup: register pid2 with same sensor (to test IsOtherClientUsingSensor path)
-    clientInfo.UpdateAppThreadInfo(pid2, 2002, 0);
-    sptr<SensorBasicDataChannel> channel2 = new (std::nothrow) SensorBasicDataChannel();
-    if (channel2 != nullptr) {
-        channel2->CreateSensorBasicChannel();
-        channel2->SetSensorStatus(true);
-        clientInfo.UpdateSensorChannel(pid2, channel2);
-    }
     clientInfo.UpdateSensorInfo(sensorDesc1, pid2, sensorInfo);
-    clientInfo.UpdateSensorInfo(sensorDesc2, pid2, sensorInfo);
+    powerPolicy.SuspendSensors(pid1);
+    powerPolicy.SuspendSensors(pid2);
+    powerPolicy.ResetSensors();
 
-    // ===== 1. GetActiveInfoList =====
-    {
-        std::vector<ActiveInfo> activeInfoList = powerPolicy.GetActiveInfoList(pid1);
-    }
-    {
-        std::vector<ActiveInfo> activeInfoList = powerPolicy.GetActiveInfoList(pid2);
-    }
-    {
-        // Non-existent pid
-        std::vector<ActiveInfo> activeInfoList = powerPolicy.GetActiveInfoList(99999);
-    }
+    ActiveInfo activeInfo(pid1, DEFAULT_DEVICE_ID, sensorType, DEFAULT_SENSOR_ID, samplingPeriodNs, maxReportDelayNs);
+    std::vector<SessionPtr> emptySessionList;
+    powerPolicy.ReportActiveInfo(activeInfo, emptySessionList);
 
-    // ===== 2. SuspendSensors =====
-    {
-        // First suspend - saves sensor info and disables
-        powerPolicy.SuspendSensors(pid1);
-    }
-    {
-        // Suspend again - pidSensorInfoIt already exists path
-        powerPolicy.SuspendSensors(pid1);
-    }
-    {
-        // Suspend pid2 - has sensor also used by pid1 (IsOtherClientUsingSensor)
-        powerPolicy.SuspendSensors(pid2);
-    }
-    {
-        // Suspend non-existent pid - empty sensorIdList
-        powerPolicy.SuspendSensors(99999);
-    }
+    ActiveInfo invalidActiveInfo(-1, DEFAULT_DEVICE_ID, -1, DEFAULT_SENSOR_ID, 0, 0);
+    powerPolicy.ReportActiveInfo(invalidActiveInfo, emptySessionList);
+}
 
-    // ===== 3. ResumeSensors =====
-    {
-        // Resume pid1 - was suspended
-        powerPolicy.ResumeSensors(pid1);
-    }
-    {
-        // Resume pid2
-        powerPolicy.ResumeSensors(pid2);
-    }
-    {
-        // Resume non-suspended pid - not in pidSensorInfoMap
-        powerPolicy.ResumeSensors(99998);
-    }
+void RunDeleteAndSuspendListTests(SensorPowerPolicy &powerPolicy, ClientInfo &clientInfo,
+    const SensorDescription &sensorDesc1, const SensorBasicInfo &sensorInfo, int32_t pid1, int32_t pid2)
+{
+    clientInfo.UpdateSensorInfo(sensorDesc1, pid1, sensorInfo);
+    powerPolicy.SuspendSensors(pid1);
+    powerPolicy.DeleteDeathPidSensorInfo(pid1);
+    powerPolicy.DeleteDeathPidSensorInfo(UNKNOWN_PID3);
 
-    // ===== 4. ResetSensors =====
-    {
-        // Suspend both pids first, then reset
-        clientInfo.UpdateSensorInfo(sensorDesc1, pid1, sensorInfo);
-        clientInfo.UpdateSensorInfo(sensorDesc1, pid2, sensorInfo);
-        powerPolicy.SuspendSensors(pid1);
-        powerPolicy.SuspendSensors(pid2);
-        powerPolicy.ResetSensors();
-    }
+    clientInfo.UpdateSensorInfo(sensorDesc1, pid1, sensorInfo);
+    clientInfo.UpdateSensorInfo(sensorDesc1, pid2, sensorInfo);
+    powerPolicy.SuspendSensors(pid1);
+    powerPolicy.SuspendSensors(pid2);
+    (void)powerPolicy.GetSuspendPidList();
+    powerPolicy.ResetSensors();
+}
 
-    // ===== 5. ReportActiveInfo =====
-    {
-        ActiveInfo activeInfo(pid1, 0, sensorType, 0, samplingPeriodNs, maxReportDelayNs);
-        std::vector<SessionPtr> emptySessionList;
-        powerPolicy.ReportActiveInfo(activeInfo, emptySessionList);
-    }
-    {
-        // Invalid activeInfo (negative pid)
-        ActiveInfo activeInfo(-1, 0, -1, 0, 0, 0);
-        std::vector<SessionPtr> emptySessionList;
-        powerPolicy.ReportActiveInfo(activeInfo, emptySessionList);
-    }
+void RunFreezingSensorTest(SensorPowerPolicy &powerPolicy, ClientInfo &clientInfo,
+    const SensorDescription &sensorDescPedometer, const SensorBasicInfo &sensorInfo, int32_t pid1)
+{
+    clientInfo.UpdateSensorInfo(sensorDescPedometer, pid1, sensorInfo);
+    powerPolicy.SuspendSensors(pid1);
+    powerPolicy.ResumeSensors(pid1);
+}
 
-    // ===== 6. DeleteDeathPidSensorInfo =====
-    {
-        // Setup suspend info first, then delete
-        clientInfo.UpdateSensorInfo(sensorDesc1, pid1, sensorInfo);
-        powerPolicy.SuspendSensors(pid1);
-        powerPolicy.DeleteDeathPidSensorInfo(pid1);
-    }
-    {
-        // Delete non-existent pid - no-op
-        powerPolicy.DeleteDeathPidSensorInfo(99997);
-    }
-
-    // ===== 7. GetSuspendPidList =====
-    {
-        clientInfo.UpdateSensorInfo(sensorDesc1, pid1, sensorInfo);
-        clientInfo.UpdateSensorInfo(sensorDesc1, pid2, sensorInfo);
-        powerPolicy.SuspendSensors(pid1);
-        powerPolicy.SuspendSensors(pid2);
-        std::vector<int32_t> suspendList = powerPolicy.GetSuspendPidList();
-        // Clean up
-        powerPolicy.ResetSensors();
-    }
-
-    // ===== 8. CheckFreezingSensor (via Suspend with pedometer) =====
-    {
-        // Pedometer sensor should be skipped during suspend
-        clientInfo.UpdateSensorInfo(sensorDescPedometer, pid1, sensorInfo);
-        powerPolicy.SuspendSensors(pid1);
-        powerPolicy.ResumeSensors(pid1);
-    }
-
-    // Cleanup
+void CleanupClientInfoState(ClientInfo &clientInfo, const SensorDescription &sensorDesc1,
+    const SensorDescription &sensorDesc2, const SensorDescription &sensorDescPedometer, int32_t pid1, int32_t pid2)
+{
     clientInfo.ClearSensorInfo(sensorDesc1);
     clientInfo.ClearSensorInfo(sensorDesc2);
     clientInfo.ClearSensorInfo(sensorDescPedometer);
     clientInfo.DestroySensorChannel(pid1);
     clientInfo.DestroySensorChannel(pid2);
+}
+} // namespace
 
+bool SensorPowerPolicyFuzzTest(const uint8_t *data, size_t size)
+{
+    SetUpTestCase();
+
+    SensorPowerPolicyFuzzInput input;
+    ReadFuzzInput(data, size, input);
+    NormalizeInput(input);
+
+    SensorPowerPolicy &powerPolicy = SensorPowerPolicy::GetInstance();
+    ClientInfo &clientInfo = ClientInfo::GetInstance();
+    SensorDescription sensorDesc1 { DEFAULT_DEVICE_ID, input.sensorType, DEFAULT_SENSOR_ID, DEFAULT_LOCATION };
+    SensorDescription sensorDescPedometer { DEFAULT_DEVICE_ID, PEDOMETER_DETECTION_TYPE, DEFAULT_SENSOR_ID,
+        DEFAULT_LOCATION };
+    SensorDescription sensorDesc2 { DEFAULT_DEVICE_ID, input.sensorType + 1, input.sensorId2, DEFAULT_LOCATION };
+
+    SensorBasicInfo sensorInfo;
+    sensorInfo.SetSamplingPeriodNs(input.samplingPeriodNs);
+    sensorInfo.SetMaxReportDelayNs(input.maxReportDelayNs);
+    sensorInfo.SetSensorState(true);
+    PrepareClientInfoState(clientInfo, input, sensorDesc1, sensorDescPedometer, sensorDesc2, sensorInfo);
+    RunActiveInfoTests(powerPolicy, input.pid1, input.pid2);
+    RunSuspendResumeTests(powerPolicy, input.pid1, input.pid2);
+    RunResetAndReportTests(powerPolicy, clientInfo, sensorDesc1, sensorInfo,
+        input.pid1, input.pid2, input.sensorType, input.samplingPeriodNs, input.maxReportDelayNs);
+    RunDeleteAndSuspendListTests(powerPolicy, clientInfo, sensorDesc1, sensorInfo, input.pid1, input.pid2);
+    RunFreezingSensorTest(powerPolicy, clientInfo, sensorDescPedometer, sensorInfo, input.pid1);
+    CleanupClientInfoState(clientInfo, sensorDesc1, sensorDesc2, sensorDescPedometer, input.pid1, input.pid2);
     return true;
 }
 }  // namespace Sensors

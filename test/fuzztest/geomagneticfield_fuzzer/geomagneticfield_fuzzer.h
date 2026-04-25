@@ -1,3 +1,6 @@
+#ifndef GEOMAGNETICFIELD_FUZZER_H
+#define GEOMAGNETICFIELD_FUZZER_H
+
 /*
  * Copyright (c) 2021 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,3 +25,4 @@
 
 #define FUZZ_PROJECT_NAME "geomagneticfield_fuzzer"
 
+#endif // GEOMAGNETICFIELD_FUZZER_H

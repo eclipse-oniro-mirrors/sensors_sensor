@@ -17,6 +17,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <string>
 #include <unordered_set>
 
@@ -33,7 +35,12 @@ using namespace Security::AccessToken;
 namespace {
 constexpr size_t U32_AT_SIZE = 4;
 constexpr size_t MAX_STRING_LEN = 64;
-} // namespace
+
+struct ShakeControlFuzzInput {
+    int32_t userId = 0;
+    std::string bundleName;
+    std::string tokenId;
+};
 
 template<class T>
 size_t GetObject(T &object, const uint8_t *data, size_t size)
@@ -56,6 +63,21 @@ std::string GetStringFromData(const uint8_t *data, size_t size, size_t maxLen)
         return "";
     }
     return std::string(reinterpret_cast<const char *>(data), len);
+}
+
+void ReadFuzzInput(const uint8_t *data, size_t size, ShakeControlFuzzInput &input)
+{
+    size_t startPos = 0;
+    startPos += GetObject<int32_t>(input.userId, data + startPos, size - startPos);
+
+    size_t remaining = size - startPos;
+    size_t bundleNameLen = (remaining > MAX_STRING_LEN) ? MAX_STRING_LEN : remaining / 2;
+    input.bundleName = GetStringFromData(data + startPos, bundleNameLen, MAX_STRING_LEN);
+
+    startPos += bundleNameLen;
+    remaining = size - startPos;
+    size_t tokenIdLen = (remaining > MAX_STRING_LEN) ? MAX_STRING_LEN : remaining;
+    input.tokenId = GetStringFromData(data + startPos, tokenIdLen, MAX_STRING_LEN);
 }
 
 void SetUpTestCase()
@@ -82,195 +104,107 @@ void SetUpTestCase()
     delete[] perms;
 }
 
+void ResetManagerState(const std::shared_ptr<SensorShakeControlManager> &manager)
+{
+    manager->shakeSensorControlAppInfoList_.clear();
+    manager->shakeSensorNoControlAppInfoList_.clear();
+    manager->shakeIgnoreControlList_.clear();
+}
+
+void RunGetShakeIgnoreControlListTests(const std::shared_ptr<SensorShakeControlManager> &manager,
+    const ShakeControlFuzzInput &input)
+{
+    (void)manager->GetShakeIgnoreControlList("123,456,789", ',');
+    (void)manager->GetShakeIgnoreControlList("", ',');
+    (void)manager->GetShakeIgnoreControlList("12345", ',');
+    (void)manager->GetShakeIgnoreControlList(" 123 , 456 , 789 ", ',');
+    (void)manager->GetShakeIgnoreControlList("123,123,456", ',');
+    (void)manager->GetShakeIgnoreControlList("   ,   ,   ", ',');
+    (void)manager->GetShakeIgnoreControlList("a;b;c", ';');
+    (void)manager->GetShakeIgnoreControlList(input.bundleName + "," + input.tokenId, ',');
+}
+
+void RunCheckAppIsNeedControlTests(const std::shared_ptr<SensorShakeControlManager> &manager,
+    const ShakeControlFuzzInput &input)
+{
+    ResetManagerState(manager);
+    (void)manager->CheckAppIsNeedControl("com.test.app", "100", 0);
+
+    ShakeControlAppInfo controlApp = { "com.test.controlled", "200", input.userId };
+    manager->shakeSensorControlAppInfoList_.insert(controlApp);
+    (void)manager->CheckAppIsNeedControl("com.test.controlled", "200", input.userId);
+    (void)manager->CheckAppIsNeedControl("com.test.other", "300", input.userId);
+
+    manager->shakeIgnoreControlList_.insert("200");
+    (void)manager->CheckAppIsNeedControl("com.test.controlled", "200", input.userId);
+    (void)manager->CheckAppIsNeedControl("com.test.controlled", "201", input.userId);
+    manager->shakeIgnoreControlList_.clear();
+    (void)manager->CheckAppIsNeedControl(input.bundleName, input.tokenId, input.userId);
+}
+
+void RunCheckAppInfoIsNeedModifyTests(const std::shared_ptr<SensorShakeControlManager> &manager,
+    const ShakeControlFuzzInput &input)
+{
+    ResetManagerState(manager);
+    (void)manager->CheckAppInfoIsNeedModify("com.test.app", "100", input.userId);
+
+    ShakeControlAppInfo noControlApp = { "com.test.nocontrol", "400", input.userId };
+    manager->shakeSensorNoControlAppInfoList_.insert(noControlApp);
+    (void)manager->CheckAppInfoIsNeedModify("com.test.nocontrol", "400", input.userId);
+    (void)manager->CheckAppInfoIsNeedModify("com.test.other", "500", input.userId);
+
+    ResetManagerState(manager);
+    ShakeControlAppInfo controlApp = { "com.test.controlled2", "600", input.userId };
+    manager->shakeSensorControlAppInfoList_.insert(controlApp);
+    (void)manager->CheckAppInfoIsNeedModify("com.test.controlled2", "600", input.userId);
+    (void)manager->CheckAppInfoIsNeedModify("com.test.new", "700", input.userId);
+}
+
+void RunAppInfoAndLogTests(const std::shared_ptr<SensorShakeControlManager> &manager,
+    const ShakeControlFuzzInput &input)
+{
+    ResetManagerState(manager);
+    ShakeControlAppInfo controlApp = { "com.test.a", "100", input.userId };
+    ShakeControlAppInfo noControlApp = { "com.test.b", "200", input.userId };
+    manager->shakeSensorControlAppInfoList_.insert(controlApp);
+    manager->shakeSensorNoControlAppInfoList_.insert(noControlApp);
+    (void)manager->CheckAppInfoIsNeedModify("com.test.a", "100", input.userId);
+    (void)manager->CheckAppInfoIsNeedModify("com.test.b", "200", input.userId);
+    (void)manager->CheckAppInfoIsNeedModify("com.test.c", "300", input.userId);
+    (void)manager->CheckAppInfoIsNeedModify(input.bundleName, input.tokenId, input.userId);
+    (void)manager->GetCurrentUserId();
+
+    std::unordered_set<ShakeControlAppInfo> oldClosed;
+    std::unordered_set<ShakeControlAppInfo> latestClosed;
+    std::unordered_set<ShakeControlAppInfo> latestOpened;
+    ShakeControlAppInfo app1 = { "com.test.app1", "100", input.userId };
+    ShakeControlAppInfo app2 = { "com.test.app2", "200", input.userId };
+    ShakeControlAppInfo app3 = { "com.test.app3", "300", input.userId };
+    oldClosed.insert(app1);
+    latestOpened.insert(app1);
+    latestClosed.insert(app2);
+    oldClosed.insert(app3);
+    latestClosed.insert(app3);
+    manager->ReportAppSwitchChangeLog(oldClosed, latestClosed, latestOpened);
+
+    std::unordered_set<ShakeControlAppInfo> empty;
+    manager->ReportAppSwitchChangeLog(empty, empty, empty);
+}
+} // namespace
+
 bool SensorShakeControlFuzzTest(const uint8_t *data, size_t size)
 {
     SetUpTestCase();
-    size_t startPos = 0;
 
-    int32_t userId = 0;
-    startPos += GetObject<int32_t>(userId, data + startPos, size - startPos);
+    ShakeControlFuzzInput input;
+    ReadFuzzInput(data, size, input);
 
-    // Extract fuzzed strings for bundleName and tokenId
-    size_t remaining = size - startPos;
-    size_t strLen1 = (remaining > MAX_STRING_LEN) ? MAX_STRING_LEN : remaining / 2;
-    std::string bundleName = GetStringFromData(data + startPos, strLen1, MAX_STRING_LEN);
-    startPos += strLen1;
-    remaining = size - startPos;
-    size_t strLen2 = (remaining > MAX_STRING_LEN) ? MAX_STRING_LEN : remaining;
-    std::string tokenId = GetStringFromData(data + startPos, strLen2, MAX_STRING_LEN);
-
-    auto mgr = SENSOR_SHAKE_CONTROL_MGR;
-
-    // ===== 1. GetShakeIgnoreControlList =====
-    // Normal comma-separated string
-    {
-        std::unordered_set<std::string> result = mgr->GetShakeIgnoreControlList("123,456,789", ',');
-    }
-    // Empty string
-    {
-        std::unordered_set<std::string> result = mgr->GetShakeIgnoreControlList("", ',');
-    }
-    // Single element
-    {
-        std::unordered_set<std::string> result = mgr->GetShakeIgnoreControlList("12345", ',');
-    }
-    // With spaces (trimming path)
-    {
-        std::unordered_set<std::string> result = mgr->GetShakeIgnoreControlList(" 123 , 456 , 789 ", ',');
-    }
-    // Duplicate entries
-    {
-        std::unordered_set<std::string> result = mgr->GetShakeIgnoreControlList("123,123,456", ',');
-    }
-    // All spaces
-    {
-        std::unordered_set<std::string> result = mgr->GetShakeIgnoreControlList("   ,   ,   ", ',');
-    }
-    // Different delimiter
-    {
-        std::unordered_set<std::string> result = mgr->GetShakeIgnoreControlList("a;b;c", ';');
-    }
-    // Fuzzed string
-    {
-        std::string fuzzStr = bundleName + "," + tokenId;
-        std::unordered_set<std::string> result = mgr->GetShakeIgnoreControlList(fuzzStr, ',');
-    }
-
-    // ===== 2. CheckAppIsNeedControl =====
-    // First populate the internal lists via direct member access (-Dprivate=public)
-    {
-        // Empty control lists - should return false
-        mgr->shakeSensorControlAppInfoList_.clear();
-        mgr->shakeSensorNoControlAppInfoList_.clear();
-        mgr->shakeIgnoreControlList_.clear();
-
-        bool result = mgr->CheckAppIsNeedControl("com.test.app", "100", 0);
-        (void)result;
-    }
-    {
-        // Add app to control list - should return true
-        ShakeControlAppInfo controlApp = {"com.test.controlled", "200", userId};
-        mgr->shakeSensorControlAppInfoList_.clear();
-        mgr->shakeSensorControlAppInfoList_.insert(controlApp);
-
-        bool result = mgr->CheckAppIsNeedControl("com.test.controlled", "200", userId);
-        (void)result;
-
-        // Different app - not in control list
-        result = mgr->CheckAppIsNeedControl("com.test.other", "300", userId);
-        (void)result;
-    }
-    {
-        // Add tokenId to ignore list - should return false even if in control list
-        mgr->shakeIgnoreControlList_.clear();
-        mgr->shakeIgnoreControlList_.insert("200");
-
-        bool result = mgr->CheckAppIsNeedControl("com.test.controlled", "200", userId);
-        (void)result;
-
-        // Not in ignore list
-        result = mgr->CheckAppIsNeedControl("com.test.controlled", "201", userId);
-        (void)result;
-
-        mgr->shakeIgnoreControlList_.clear();
-    }
-    {
-        // Fuzzed inputs
-        bool result = mgr->CheckAppIsNeedControl(bundleName, tokenId, userId);
-        (void)result;
-    }
-
-    // ===== 3. CheckAppInfoIsNeedModify =====
-    {
-        // Empty lists - should return true (needs modify)
-        mgr->shakeSensorControlAppInfoList_.clear();
-        mgr->shakeSensorNoControlAppInfoList_.clear();
-
-        bool result = mgr->CheckAppInfoIsNeedModify("com.test.app", "100", userId);
-        (void)result;
-    }
-    {
-        // App in no-control list - should return false
-        ShakeControlAppInfo noControlApp = {"com.test.nocontrol", "400", userId};
-        mgr->shakeSensorNoControlAppInfoList_.clear();
-        mgr->shakeSensorNoControlAppInfoList_.insert(noControlApp);
-
-        bool result = mgr->CheckAppInfoIsNeedModify("com.test.nocontrol", "400", userId);
-        (void)result;
-
-        // Different app - not in no-control list
-        result = mgr->CheckAppInfoIsNeedModify("com.test.other", "500", userId);
-        (void)result;
-    }
-    {
-        // App in control list - should return false
-        ShakeControlAppInfo controlApp = {"com.test.controlled2", "600", userId};
-        mgr->shakeSensorControlAppInfoList_.clear();
-        mgr->shakeSensorControlAppInfoList_.insert(controlApp);
-        mgr->shakeSensorNoControlAppInfoList_.clear();
-
-        bool result = mgr->CheckAppInfoIsNeedModify("com.test.controlled2", "600", userId);
-        (void)result;
-
-        // Different app - not in either list
-        result = mgr->CheckAppInfoIsNeedModify("com.test.new", "700", userId);
-        (void)result;
-    }
-    {
-        // Both lists populated
-        ShakeControlAppInfo controlApp = {"com.test.a", "100", userId};
-        ShakeControlAppInfo noControlApp = {"com.test.b", "200", userId};
-        mgr->shakeSensorControlAppInfoList_.clear();
-        mgr->shakeSensorControlAppInfoList_.insert(controlApp);
-        mgr->shakeSensorNoControlAppInfoList_.clear();
-        mgr->shakeSensorNoControlAppInfoList_.insert(noControlApp);
-
-        mgr->CheckAppInfoIsNeedModify("com.test.a", "100", userId);
-        mgr->CheckAppInfoIsNeedModify("com.test.b", "200", userId);
-        mgr->CheckAppInfoIsNeedModify("com.test.c", "300", userId);
-    }
-    {
-        // Fuzzed inputs
-        mgr->CheckAppInfoIsNeedModify(bundleName, tokenId, userId);
-    }
-
-    // ===== 4. GetCurrentUserId =====
-    {
-        mgr->GetCurrentUserId();
-    }
-
-    // ===== 5. ReportAppSwitchChangeLog =====
-    {
-        std::unordered_set<ShakeControlAppInfo> oldClosed;
-        std::unordered_set<ShakeControlAppInfo> latestClosed;
-        std::unordered_set<ShakeControlAppInfo> latestOpened;
-
-        ShakeControlAppInfo app1 = {"com.test.app1", "100", userId};
-        ShakeControlAppInfo app2 = {"com.test.app2", "200", userId};
-        ShakeControlAppInfo app3 = {"com.test.app3", "300", userId};
-
-        // App moved from closed to opened
-        oldClosed.insert(app1);
-        latestOpened.insert(app1);
-        // App newly closed
-        latestClosed.insert(app2);
-        // App stayed closed
-        oldClosed.insert(app3);
-        latestClosed.insert(app3);
-
-        mgr->ReportAppSwitchChangeLog(oldClosed, latestClosed, latestOpened);
-    }
-    {
-        // Empty sets
-        std::unordered_set<ShakeControlAppInfo> empty;
-        mgr->ReportAppSwitchChangeLog(empty, empty, empty);
-    }
-
-    // Cleanup
-    mgr->shakeSensorControlAppInfoList_.clear();
-    mgr->shakeSensorNoControlAppInfoList_.clear();
-    mgr->shakeIgnoreControlList_.clear();
-
+    auto manager = SENSOR_SHAKE_CONTROL_MGR;
+    RunGetShakeIgnoreControlListTests(manager, input);
+    RunCheckAppIsNeedControlTests(manager, input);
+    RunCheckAppInfoIsNeedModifyTests(manager, input);
+    RunAppInfoAndLogTests(manager, input);
+    ResetManagerState(manager);
     return true;
 }
 }  // namespace Sensors

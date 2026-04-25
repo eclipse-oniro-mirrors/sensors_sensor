@@ -28,6 +28,12 @@ namespace OHOS {
 namespace Sensors {
 namespace {
 constexpr size_t U32_AT_SIZE = 4;
+constexpr int32_t TEST_USER_ID = 100;
+constexpr int32_t NEXT_SENSOR_OFFSET = 1;
+constexpr int32_t INVALID_FD = -1;
+constexpr size_t BATCH_EVENT_COUNT = 3;
+constexpr size_t LARGE_RECEIVE_BUFFER_SIZE = 4096;
+constexpr size_t SMALL_RECEIVE_BUFFER_SIZE = 1024;
 } // namespace
 
 template<class T>
@@ -46,205 +52,162 @@ size_t GetObject(T &object, const uint8_t *data, size_t size)
 
 static void RecvCallback(int32_t length)
 {
-    // no-op callback for ReceiveData
+    (void)length;
+}
+
+SensorData MakeSensorData(int32_t sensorType, float sensorValue)
+{
+    SensorData sensorData;
+    (void)memset_s(&sensorData, sizeof(sensorData), 0, sizeof(sensorData));
+    sensorData.sensorTypeId = sensorType;
+    sensorData.dataLen = sizeof(float);
+    (void)memcpy_s(sensorData.data, sizeof(sensorData.data), &sensorValue, sizeof(float));
+    return sensorData;
+}
+
+void RunChannelStateTests(const sptr<SensorBasicDataChannel> &channel)
+{
+    (void)channel->GetSendDataFd();
+    (void)channel->GetReceiveDataFd();
+    channel->SetSensorStatus(true);
+    (void)channel->GetSensorStatus();
+    channel->SetSensorStatus(false);
+    (void)channel->GetSensorStatus();
+    channel->SetPackageName("testPackage");
+    (void)channel->GetPackageName();
+    channel->SetPackageName("");
+    (void)channel->GetPackageName();
+    channel->SetUserId(TEST_USER_ID);
+    (void)channel->GetUserId();
+    channel->SetAccessTokenId("12345");
+    (void)channel->GetAccessTokenId();
+    channel->SetAccessTokenId("");
+    (void)channel->GetAccessTokenId();
+    (void)channel->GetDataCacheBuf();
+}
+
+void RunSendDataTests(const sptr<SensorBasicDataChannel> &channel, int32_t sensorType, float sensorValue)
+{
+    SensorData sensorData = MakeSensorData(sensorType, sensorValue);
+    channel->SetSensorStatus(true);
+    channel->SendData(&sensorData, sizeof(sensorData));
+
+    SensorData events[BATCH_EVENT_COUNT];
+    for (size_t index = 0; index < BATCH_EVENT_COUNT; ++index) {
+        float currentValue = sensorValue + static_cast<float>(index);
+        events[index] = MakeSensorData(sensorType + static_cast<int32_t>(index), currentValue);
+    }
+    channel->SendData(events, sizeof(events));
+    channel->SendData(nullptr, sizeof(SensorData));
+    channel->SendData(&sensorData, 0);
+}
+
+void RunReceiveDataTests(const sptr<SensorBasicDataChannel> &channel, int32_t sensorType, float sensorValue)
+{
+    SensorData sensorData = MakeSensorData(sensorType, sensorValue);
+    channel->SendData(&sensorData, sizeof(sensorData));
+
+    char recvBuf[LARGE_RECEIVE_BUFFER_SIZE] = {0};
+    channel->ReceiveData(RecvCallback, recvBuf, sizeof(recvBuf));
+
+    char smallRecvBuf[SMALL_RECEIVE_BUFFER_SIZE] = {0};
+    channel->ReceiveData(nullptr, smallRecvBuf, sizeof(smallRecvBuf));
+    channel->ReceiveData(RecvCallback, nullptr, SMALL_RECEIVE_BUFFER_SIZE);
+}
+
+void RunBinderAndDestroyTests(const sptr<SensorBasicDataChannel> &channel)
+{
+    MessageParcel parcel;
+    channel->SendToBinder(parcel);
+
+    channel->CloseSendFd();
+    SensorData sensorData;
+    (void)memset_s(&sensorData, sizeof(sensorData), 0, sizeof(sensorData));
+    channel->SendData(&sensorData, sizeof(sensorData));
+
+    channel->DestroySensorBasicChannel();
+    channel->DestroySensorBasicChannel();
+}
+
+void RunCreateFromParcelTests()
+{
+    sptr<SensorBasicDataChannel> srcChannel = new (std::nothrow) SensorBasicDataChannel();
+    if (srcChannel != nullptr && srcChannel->CreateSensorBasicChannel() == 0) {
+        MessageParcel parcel;
+        srcChannel->SendToBinder(parcel);
+
+        sptr<SensorBasicDataChannel> dstChannel = new (std::nothrow) SensorBasicDataChannel();
+        if (dstChannel != nullptr) {
+            dstChannel->CreateSensorBasicChannel(parcel);
+            dstChannel->DestroySensorBasicChannel();
+        }
+        srcChannel->DestroySensorBasicChannel();
+    }
+}
+
+void RunCreateBySendFdTests()
+{
+    sptr<SensorBasicDataChannel> invalidChannel = new (std::nothrow) SensorBasicDataChannel();
+    if (invalidChannel != nullptr) {
+        invalidChannel->CreateSensorBasicChannelBySendFd(INVALID_FD);
+        invalidChannel->DestroySensorBasicChannel();
+    }
+
+    sptr<SensorBasicDataChannel> srcChannel = new (std::nothrow) SensorBasicDataChannel();
+    if (srcChannel != nullptr && srcChannel->CreateSensorBasicChannel() == 0) {
+        int32_t fd = srcChannel->GetSendDataFd();
+        sptr<SensorBasicDataChannel> channel = new (std::nothrow) SensorBasicDataChannel();
+        if (channel != nullptr) {
+            channel->CreateSensorBasicChannelBySendFd(fd);
+            channel->CreateSensorBasicChannelBySendFd(fd + NEXT_SENSOR_OFFSET);
+        }
+    }
+}
+
+void RunDefaultStateTests()
+{
+    sptr<SensorBasicDataChannel> channel = new (std::nothrow) SensorBasicDataChannel();
+    if (channel != nullptr) {
+        (void)channel->GetSensorStatus();
+        (void)channel->GetPackageName();
+        (void)channel->GetUserId();
+        (void)channel->GetAccessTokenId();
+        (void)channel->GetDataCacheBuf();
+        (void)channel->GetSendDataFd();
+        (void)channel->GetReceiveDataFd();
+
+        SensorData sensorData;
+        (void)memset_s(&sensorData, sizeof(sensorData), 0, sizeof(sensorData));
+        channel->SendData(&sensorData, sizeof(sensorData));
+
+        MessageParcel parcel;
+        channel->SendToBinder(parcel);
+    }
 }
 
 bool SensorBasicDataChannelFuzzTest(const uint8_t *data, size_t size)
 {
     size_t startPos = 0;
-
     float sensorValue = 0.0f;
     startPos += GetObject<float>(sensorValue, data + startPos, size - startPos);
     int32_t sensorType = 0;
     startPos += GetObject<int32_t>(sensorType, data + startPos, size - startPos);
 
-    // ===== 1. CreateSensorBasicChannel (socket pair) =====
-    {
-        sptr<SensorBasicDataChannel> channel = new (std::nothrow) SensorBasicDataChannel();
-        if (channel == nullptr) {
-            return false;
-        }
-        int32_t ret = channel->CreateSensorBasicChannel();
-        if (ret != 0) {
-            return true;  // socket creation may fail in fuzz env, that's ok
-        }
-
-        // GetSendDataFd / GetReceiveDataFd
-        (void)channel->GetSendDataFd();
-        (void)channel->GetReceiveDataFd();
-
-        // GetSensorStatus / SetSensorStatus
-        channel->SetSensorStatus(true);
-        (void)channel->GetSensorStatus();
-        channel->SetSensorStatus(false);
-        (void)channel->GetSensorStatus();
-
-        // SetPackageName / GetPackageName
-        channel->SetPackageName("testPackage");
-        (void)channel->GetPackageName();
-        channel->SetPackageName("");
-        (void)channel->GetPackageName();
-
-        // SetUserId / GetUserId
-        channel->SetUserId(100);
-        (void)channel->GetUserId();
-
-        // SetAccessTokenId / GetAccessTokenId
-        channel->SetAccessTokenId("12345");
-        (void)channel->GetAccessTokenId();
-        channel->SetAccessTokenId("");
-        (void)channel->GetAccessTokenId();
-
-        // GetDataCacheBuf
-        (void)channel->GetDataCacheBuf();
-
-        // ===== 2. SendData =====
-        {
-            SensorData sensorData;
-            (void)memset_s(&sensorData, sizeof(sensorData), 0, sizeof(sensorData));
-            sensorData.sensorTypeId = sensorType;
-            sensorData.dataLen = sizeof(float);
-            (void)memcpy_s(sensorData.data, sizeof(sensorData.data), &sensorValue, sizeof(float));
-            channel->SetSensorStatus(true);
-            channel->SendData(&sensorData, sizeof(sensorData));
-        }
-        // Send multiple SensorData
-        {
-            SensorData events[3];
-            for (int i = 0; i < 3; i++) {
-                (void)memset_s(&events[i], sizeof(SensorData), 0, sizeof(SensorData));
-                events[i].sensorTypeId = sensorType + i;
-                events[i].dataLen = sizeof(float);
-                float val = sensorValue + static_cast<float>(i);
-                (void)memcpy_s(events[i].data, sizeof(events[i].data), &val, sizeof(float));
-            }
-            channel->SendData(events, sizeof(events));
-        }
-        // SendData with nullptr
-        {
-            channel->SendData(nullptr, sizeof(SensorData));
-        }
-        // SendData with zero size
-        {
-            SensorData sensorData;
-            (void)memset_s(&sensorData, sizeof(sensorData), 0, sizeof(sensorData));
-            channel->SendData(&sensorData, 0);
-        }
-
-        // ===== 3. ReceiveData =====
-        {
-            // First send some data, then receive
-            SensorData sensorData;
-            (void)memset_s(&sensorData, sizeof(sensorData), 0, sizeof(sensorData));
-            sensorData.sensorTypeId = sensorType;
-            sensorData.dataLen = sizeof(float);
-            (void)memcpy_s(sensorData.data, sizeof(sensorData.data), &sensorValue, sizeof(float));
-            channel->SendData(&sensorData, sizeof(sensorData));
-
-            // Now try to receive
-            char recvBuf[4096] = {0};
-            channel->ReceiveData(RecvCallback, recvBuf, sizeof(recvBuf));
-        }
-        // ReceiveData with nullptr callback
-        {
-            char recvBuf[1024] = {0};
-            channel->ReceiveData(nullptr, recvBuf, sizeof(recvBuf));
-        }
-        // ReceiveData with nullptr vaddr
-        {
-            channel->ReceiveData(RecvCallback, nullptr, 1024);
-        }
-
-        // ===== 4. SendToBinder =====
-        {
-            MessageParcel parcel;
-            channel->SendToBinder(parcel);
-        }
-
-        // ===== 5. CloseSendFd =====
-        {
-            channel->CloseSendFd();
-            // After closing, SendData should fail
-            SensorData sensorData;
-            (void)memset_s(&sensorData, sizeof(sensorData), 0, sizeof(sensorData));
-            channel->SendData(&sensorData, sizeof(sensorData));
-        }
-
-        // ===== 6. DestroySensorBasicChannel =====
-        channel->DestroySensorBasicChannel();
-        // Double destroy should be safe
-        channel->DestroySensorBasicChannel();
+    sptr<SensorBasicDataChannel> channel = new (std::nothrow) SensorBasicDataChannel();
+    if (channel == nullptr) {
+        return false;
+    }
+    if (channel->CreateSensorBasicChannel() != 0) {
+        return true;
     }
 
-    // ===== 7. CreateSensorBasicChannel from MessageParcel =====
-    {
-        // Create a channel with socket pair, write fd to parcel, then create another from parcel
-        sptr<SensorBasicDataChannel> srcChannel = new (std::nothrow) SensorBasicDataChannel();
-        if (srcChannel != nullptr) {
-            if (srcChannel->CreateSensorBasicChannel() == 0) {
-                MessageParcel parcel;
-                srcChannel->SendToBinder(parcel);
-
-                sptr<SensorBasicDataChannel> dstChannel = new (std::nothrow) SensorBasicDataChannel();
-                if (dstChannel != nullptr) {
-                    dstChannel->CreateSensorBasicChannel(parcel);
-                    dstChannel->DestroySensorBasicChannel();
-                }
-            }
-            srcChannel->DestroySensorBasicChannel();
-        }
-    }
-
-    // ===== 8. CreateSensorBasicChannelBySendFd =====
-    {
-        sptr<SensorBasicDataChannel> channel = new (std::nothrow) SensorBasicDataChannel();
-        if (channel != nullptr) {
-            // Invalid fd
-            channel->CreateSensorBasicChannelBySendFd(-1);
-            channel->DestroySensorBasicChannel();
-        }
-    }
-    {
-        // Valid fd from another channel
-        sptr<SensorBasicDataChannel> srcChannel = new (std::nothrow) SensorBasicDataChannel();
-        if (srcChannel != nullptr && srcChannel->CreateSensorBasicChannel() == 0) {
-            int32_t fd = srcChannel->GetSendDataFd();
-            sptr<SensorBasicDataChannel> channel = new (std::nothrow) SensorBasicDataChannel();
-            if (channel != nullptr) {
-                // Note: CreateSensorBasicChannelBySendFd takes ownership, so don't destroy srcChannel's sendFd
-                // This tests the duplicate path where sendFd_ != -1
-                channel->CreateSensorBasicChannelBySendFd(fd);
-                // Calling again should hit "Already create socketpair" path
-                channel->CreateSensorBasicChannelBySendFd(fd + 1);
-            }
-            // Don't destroy srcChannel here as fd is shared
-        }
-    }
-
-    // ===== 9. Constructor default state =====
-    {
-        sptr<SensorBasicDataChannel> channel = new (std::nothrow) SensorBasicDataChannel();
-        if (channel != nullptr) {
-            // Default state checks
-            (void)channel->GetSensorStatus();
-            (void)channel->GetPackageName();
-            (void)channel->GetUserId();
-            (void)channel->GetAccessTokenId();
-            (void)channel->GetDataCacheBuf();
-            (void)channel->GetSendDataFd();
-            (void)channel->GetReceiveDataFd();
-
-            // SendData on uninitialized channel (sendFd_ = -1)
-            SensorData sensorData;
-            (void)memset_s(&sensorData, sizeof(sensorData), 0, sizeof(sensorData));
-            channel->SendData(&sensorData, sizeof(sensorData));
-
-            // SendToBinder on uninitialized channel
-            MessageParcel parcel;
-            channel->SendToBinder(parcel);
-        }
-    }
-
+    RunChannelStateTests(channel);
+    RunSendDataTests(channel, sensorType, sensorValue);
+    RunReceiveDataTests(channel, sensorType, sensorValue);
+    RunBinderAndDestroyTests(channel);
+    RunCreateFromParcelTests();
+    RunCreateBySendFdTests();
+    RunDefaultStateTests();
     return true;
 }
 }  // namespace Sensors

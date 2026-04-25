@@ -15,6 +15,7 @@
 
 #include "sensoralgorithm_fuzzer.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -28,7 +29,26 @@ namespace OHOS {
 namespace Sensors {
 namespace {
 constexpr size_t U32_AT_SIZE = 4;
-} // namespace
+constexpr size_t VECTOR_SIZE_TWO = 2;
+constexpr size_t VECTOR_SIZE_THREE = 3;
+constexpr size_t VECTOR_SIZE_FOUR = 4;
+constexpr size_t MATRIX_SIZE_NINE = 9;
+constexpr size_t MATRIX_SIZE_SIXTEEN = 16;
+constexpr size_t INVALID_MATRIX_SIZE = 5;
+constexpr int32_t AXIS_X = 1;
+constexpr int32_t AXIS_Y = 2;
+constexpr int32_t AXIS_Z = 3;
+constexpr float STANDARD_GRAVITY = 9.81f;
+constexpr float MAX_LATITUDE = 90.0f;
+constexpr float MAX_LONGITUDE = 180.0f;
+constexpr float HIGH_ALTITUDE = 100000.0f;
+
+struct SensorAlgorithmFuzzInput {
+    std::array<float, MATRIX_SIZE_NINE> values {};
+    int32_t axisX = 0;
+    int32_t axisY = 0;
+    int64_t timeMillis = 0;
+};
 
 template<class T>
 size_t GetObject(T &object, const uint8_t *data, size_t size)
@@ -44,313 +64,258 @@ size_t GetObject(T &object, const uint8_t *data, size_t size)
     return objectSize;
 }
 
-bool SensorAlgorithmFuzzTest(const uint8_t *data, size_t size)
+void ReadFuzzInput(const uint8_t *data, size_t size, SensorAlgorithmFuzzInput &input)
 {
     size_t startPos = 0;
+    for (size_t index = 0; index < input.values.size(); ++index) {
+        startPos += GetObject<float>(input.values[index], data + startPos, size - startPos);
+    }
+    startPos += GetObject<int32_t>(input.axisX, data + startPos, size - startPos);
+    startPos += GetObject<int32_t>(input.axisY, data + startPos, size - startPos);
+    startPos += GetObject<int64_t>(input.timeMillis, data + startPos, size - startPos);
+}
+
+std::vector<float> MakeValues(const SensorAlgorithmFuzzInput &input, size_t count)
+{
+    return std::vector<float>(input.values.begin(), input.values.begin() + count);
+}
+
+std::vector<float> MakeReverseMatrix(const SensorAlgorithmFuzzInput &input)
+{
+    return std::vector<float>(input.values.rbegin(), input.values.rend());
+}
+
+void FillSixteenElementMatrix(std::vector<float> &matrix, float baseValue)
+{
+    for (size_t index = 0; index < MATRIX_SIZE_NINE; ++index) {
+        matrix[index] = baseValue + static_cast<float>(index);
+    }
+}
+
+void TestCreateQuaternion(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
+{
+    std::vector<float> rotationVector = MakeValues(input, VECTOR_SIZE_THREE);
+    std::vector<float> quaternion(VECTOR_SIZE_FOUR, 0.0f);
+    algorithm.CreateQuaternion(rotationVector, quaternion);
+
+    rotationVector = MakeValues(input, VECTOR_SIZE_FOUR);
+    algorithm.CreateQuaternion(rotationVector, quaternion);
+
+    rotationVector = MakeValues(input, VECTOR_SIZE_TWO);
+    algorithm.CreateQuaternion(rotationVector, quaternion);
+
+    rotationVector = MakeValues(input, VECTOR_SIZE_THREE);
+    quaternion.assign(VECTOR_SIZE_TWO, 0.0f);
+    algorithm.CreateQuaternion(rotationVector, quaternion);
+}
+
+void TestCreateRotationMatrix(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
+{
+    std::vector<float> rotationVector = MakeValues(input, VECTOR_SIZE_THREE);
+    std::vector<float> rotationMatrix(MATRIX_SIZE_NINE, 0.0f);
+    algorithm.CreateRotationMatrix(rotationVector, rotationMatrix);
+
+    rotationMatrix.assign(MATRIX_SIZE_SIXTEEN, 0.0f);
+    algorithm.CreateRotationMatrix(rotationVector, rotationMatrix);
+
+    rotationMatrix.assign(INVALID_MATRIX_SIZE, 0.0f);
+    algorithm.CreateRotationMatrix(rotationVector, rotationMatrix);
+}
+
+void TestTransformCoordinateSystemCommon(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
+{
+    std::vector<float> inMatrix = MakeValues(input, MATRIX_SIZE_NINE);
+    std::vector<float> outMatrix(MATRIX_SIZE_NINE, 0.0f);
+    algorithm.TransformCoordinateSystem(inMatrix, input.axisX, input.axisY, outMatrix);
+
+    inMatrix.assign(MATRIX_SIZE_SIXTEEN, 0.0f);
+    FillSixteenElementMatrix(inMatrix, input.values[0]);
+    outMatrix.assign(MATRIX_SIZE_SIXTEEN, 0.0f);
+    algorithm.TransformCoordinateSystem(inMatrix, input.axisX, input.axisY, outMatrix);
+
+    inMatrix = MakeValues(input, MATRIX_SIZE_NINE);
+    outMatrix.assign(MATRIX_SIZE_NINE, 0.0f);
+    algorithm.TransformCoordinateSystem(inMatrix, AXIS_X, AXIS_Y, outMatrix);
+    algorithm.TransformCoordinateSystem(inMatrix, AXIS_X, AXIS_Z, outMatrix);
+    algorithm.TransformCoordinateSystem(inMatrix, AXIS_Y, AXIS_X, outMatrix);
+    algorithm.TransformCoordinateSystem(inMatrix, AXIS_Y, AXIS_Z, outMatrix);
+    algorithm.TransformCoordinateSystem(inMatrix, AXIS_Z, AXIS_X, outMatrix);
+    algorithm.TransformCoordinateSystem(inMatrix, AXIS_Z, AXIS_Y, outMatrix);
+}
+
+void TestTransformCoordinateSystemEdge(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
+{
+    std::vector<float> matrix = MakeValues(input, MATRIX_SIZE_NINE);
+    algorithm.TransformCoordinateSystem(matrix, AXIS_X, AXIS_Y, matrix);
+
+    std::vector<float> inMatrix = MakeValues(input, MATRIX_SIZE_NINE);
+    std::vector<float> outMatrix(MATRIX_SIZE_NINE, 0.0f);
+    algorithm.TransformCoordinateSystem(inMatrix, -AXIS_X, -AXIS_Y, outMatrix);
+
+    inMatrix = MakeValues(input, VECTOR_SIZE_THREE);
+    outMatrix.assign(VECTOR_SIZE_THREE, 0.0f);
+    algorithm.TransformCoordinateSystem(inMatrix, AXIS_X, AXIS_Y, outMatrix);
+
+    inMatrix.assign(MATRIX_SIZE_NINE, input.values[0]);
+    outMatrix.assign(MATRIX_SIZE_SIXTEEN, 0.0f);
+    algorithm.TransformCoordinateSystem(inMatrix, AXIS_X, AXIS_Y, outMatrix);
+}
+
+void TestGetAltitude(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
+{
+    float altitude = 0.0f;
+    algorithm.GetAltitude(input.values[0], input.values[1], &altitude);
+    algorithm.GetAltitude(0.0f, input.values[1], &altitude);
+    algorithm.GetAltitude(input.values[0], input.values[1], nullptr);
+}
+
+void TestGetGeomagneticDip(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
+{
+    std::vector<float> inclinationMatrix = MakeValues(input, MATRIX_SIZE_NINE);
+    float geomagneticDip = 0.0f;
+    algorithm.GetGeomagneticDip(inclinationMatrix, &geomagneticDip);
+
+    inclinationMatrix.assign(MATRIX_SIZE_SIXTEEN, 0.0f);
+    FillSixteenElementMatrix(inclinationMatrix, input.values[0]);
+    algorithm.GetGeomagneticDip(inclinationMatrix, &geomagneticDip);
+
+    inclinationMatrix = MakeValues(input, VECTOR_SIZE_TWO);
+    algorithm.GetGeomagneticDip(inclinationMatrix, &geomagneticDip);
+
+    inclinationMatrix.assign(MATRIX_SIZE_NINE, 0.0f);
+    algorithm.GetGeomagneticDip(inclinationMatrix, nullptr);
+}
+
+void TestGetAngleModifyCommon(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
+{
+    std::vector<float> curMatrix = MakeValues(input, MATRIX_SIZE_NINE);
+    std::vector<float> preMatrix = MakeReverseMatrix(input);
+    std::vector<float> angleChange(VECTOR_SIZE_THREE, 0.0f);
+    algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
+
+    curMatrix.assign(MATRIX_SIZE_SIXTEEN, input.values[0]);
+    preMatrix.assign(MATRIX_SIZE_SIXTEEN, input.values[1]);
+    algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
+
+    curMatrix.assign(MATRIX_SIZE_NINE, input.values[0]);
+    preMatrix.assign(MATRIX_SIZE_SIXTEEN, input.values[1]);
+    algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
+}
+
+void TestGetAngleModifyEdge(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
+{
+    std::vector<float> curMatrix(MATRIX_SIZE_NINE, input.values[0]);
+    std::vector<float> preMatrix(MATRIX_SIZE_NINE, input.values[1]);
+    std::vector<float> angleChange(VECTOR_SIZE_TWO, 0.0f);
+    algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
+
+    curMatrix.assign(INVALID_MATRIX_SIZE, input.values[0]);
+    preMatrix.assign(MATRIX_SIZE_NINE, input.values[1]);
+    angleChange.assign(VECTOR_SIZE_THREE, 0.0f);
+    algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
+}
+
+void TestGetDirection(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
+{
+    std::vector<float> rotationMatrix = MakeValues(input, MATRIX_SIZE_NINE);
+    std::vector<float> rotationAngle(VECTOR_SIZE_THREE, 0.0f);
+    algorithm.GetDirection(rotationMatrix, rotationAngle);
+
+    rotationMatrix.assign(MATRIX_SIZE_SIXTEEN, input.values[0]);
+    algorithm.GetDirection(rotationMatrix, rotationAngle);
+
+    rotationMatrix.assign(INVALID_MATRIX_SIZE, input.values[0]);
+    algorithm.GetDirection(rotationMatrix, rotationAngle);
+
+    rotationMatrix.assign(MATRIX_SIZE_NINE, input.values[0]);
+    rotationAngle.assign(VECTOR_SIZE_TWO, 0.0f);
+    algorithm.GetDirection(rotationMatrix, rotationAngle);
+}
+
+void TestCreateRotationAndInclinationCommon(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
+{
+    std::vector<float> gravity = { 0.0f, 0.0f, STANDARD_GRAVITY };
+    std::vector<float> geomagnetic = MakeValues(input, VECTOR_SIZE_THREE);
+    std::vector<float> rotationMatrix(MATRIX_SIZE_NINE, 0.0f);
+    std::vector<float> inclinationMatrix(MATRIX_SIZE_NINE, 0.0f);
+    algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
+
+    geomagnetic = { input.values[3], input.values[4], input.values[5] };
+    rotationMatrix.assign(MATRIX_SIZE_SIXTEEN, 0.0f);
+    inclinationMatrix.assign(MATRIX_SIZE_SIXTEEN, 0.0f);
+    algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
+
+    gravity = MakeValues(input, VECTOR_SIZE_THREE);
+    rotationMatrix.assign(MATRIX_SIZE_NINE, 0.0f);
+    inclinationMatrix.assign(MATRIX_SIZE_NINE, 0.0f);
+    algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
+}
+
+void TestCreateRotationAndInclinationEdge(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
+{
+    std::vector<float> gravity = MakeValues(input, VECTOR_SIZE_TWO);
+    std::vector<float> geomagnetic = { input.values[VECTOR_SIZE_TWO] };
+    std::vector<float> rotationMatrix(MATRIX_SIZE_NINE, 0.0f);
+    std::vector<float> inclinationMatrix(MATRIX_SIZE_NINE, 0.0f);
+    algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
+
+    gravity = MakeValues(input, VECTOR_SIZE_THREE);
+    geomagnetic = { input.values[3], input.values[4], input.values[5] };
+    rotationMatrix.assign(INVALID_MATRIX_SIZE, 0.0f);
+    algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
+
+    gravity = { 0.0f, 0.0f, 0.0f };
+    rotationMatrix.assign(MATRIX_SIZE_NINE, 0.0f);
+    inclinationMatrix.assign(MATRIX_SIZE_NINE, 0.0f);
+    algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
+}
+
+void TestGeomagneticFieldCommon(const SensorAlgorithmFuzzInput &input)
+{
+    GeomagneticField geoField(input.values[0], input.values[1], input.values[2], input.timeMillis);
+    geoField.ObtainX();
+    geoField.ObtainY();
+    geoField.ObtainZ();
+    geoField.ObtainGeomagneticDip();
+    geoField.ObtainDeflectionAngle();
+    geoField.ObtainLevelIntensity();
+    geoField.ObtainTotalIntensity();
+}
+
+void TestGeomagneticFieldEdge(const SensorAlgorithmFuzzInput &input)
+{
+    GeomagneticField northPole(MAX_LATITUDE, MAX_LONGITUDE, 0.0f, input.timeMillis);
+    northPole.ObtainX();
+    northPole.ObtainY();
+    northPole.ObtainZ();
+
+    GeomagneticField southPole(-MAX_LATITUDE, -MAX_LONGITUDE, HIGH_ALTITUDE, input.timeMillis);
+    southPole.ObtainGeomagneticDip();
+    southPole.ObtainDeflectionAngle();
+    southPole.ObtainLevelIntensity();
+    southPole.ObtainTotalIntensity();
+}
+} // namespace
+
+bool SensorAlgorithmFuzzTest(const uint8_t *data, size_t size)
+{
+    SensorAlgorithmFuzzInput input;
+    ReadFuzzInput(data, size, input);
+
     SensorAlgorithm algorithm;
-
-    // Read fuzz floats
-    float f1 = 0.0f, f2 = 0.0f, f3 = 0.0f, f4 = 0.0f, f5 = 0.0f, f6 = 0.0f;
-    float f7 = 0.0f, f8 = 0.0f, f9 = 0.0f;
-    startPos += GetObject<float>(f1, data + startPos, size - startPos);
-    startPos += GetObject<float>(f2, data + startPos, size - startPos);
-    startPos += GetObject<float>(f3, data + startPos, size - startPos);
-    startPos += GetObject<float>(f4, data + startPos, size - startPos);
-    startPos += GetObject<float>(f5, data + startPos, size - startPos);
-    startPos += GetObject<float>(f6, data + startPos, size - startPos);
-    startPos += GetObject<float>(f7, data + startPos, size - startPos);
-    startPos += GetObject<float>(f8, data + startPos, size - startPos);
-    startPos += GetObject<float>(f9, data + startPos, size - startPos);
-
-    int32_t axisX = 0, axisY = 0;
-    startPos += GetObject<int32_t>(axisX, data + startPos, size - startPos);
-    startPos += GetObject<int32_t>(axisY, data + startPos, size - startPos);
-
-    int64_t timeMillis = 0;
-    startPos += GetObject<int64_t>(timeMillis, data + startPos, size - startPos);
-
-    // ===== 1. CreateQuaternion =====
-    // With 3-element rotation vector
-    {
-        std::vector<float> rotationVector = { f1, f2, f3 };
-        std::vector<float> quaternion(4, 0.0f);
-        algorithm.CreateQuaternion(rotationVector, quaternion);
-    }
-    // With 4-element rotation vector
-    {
-        std::vector<float> rotationVector = { f1, f2, f3, f4 };
-        std::vector<float> quaternion(4, 0.0f);
-        algorithm.CreateQuaternion(rotationVector, quaternion);
-    }
-    // Invalid: too short
-    {
-        std::vector<float> rotationVector = { f1, f2 };
-        std::vector<float> quaternion(4, 0.0f);
-        algorithm.CreateQuaternion(rotationVector, quaternion);
-    }
-    // Invalid: quaternion too short
-    {
-        std::vector<float> rotationVector = { f1, f2, f3 };
-        std::vector<float> quaternion(2, 0.0f);
-        algorithm.CreateQuaternion(rotationVector, quaternion);
-    }
-
-    // ===== 2. CreateRotationMatrix =====
-    // 9-element output
-    {
-        std::vector<float> rotationVector = { f1, f2, f3 };
-        std::vector<float> rotationMatrix(9, 0.0f);
-        algorithm.CreateRotationMatrix(rotationVector, rotationMatrix);
-    }
-    // 16-element output
-    {
-        std::vector<float> rotationVector = { f1, f2, f3 };
-        std::vector<float> rotationMatrix(16, 0.0f);
-        algorithm.CreateRotationMatrix(rotationVector, rotationMatrix);
-    }
-    // Invalid size
-    {
-        std::vector<float> rotationVector = { f1, f2, f3 };
-        std::vector<float> rotationMatrix(5, 0.0f);
-        algorithm.CreateRotationMatrix(rotationVector, rotationMatrix);
-    }
-
-    // ===== 3. TransformCoordinateSystem =====
-    // 9-element matrix
-    {
-        std::vector<float> inMatrix = { f1, f2, f3, f4, f5, f6, f7, f8, f9 };
-        std::vector<float> outMatrix(9, 0.0f);
-        algorithm.TransformCoordinateSystem(inMatrix, axisX, axisY, outMatrix);
-    }
-    // 16-element matrix
-    {
-        std::vector<float> inMatrix(16, 0.0f);
-        for (int i = 0; i < 9 && i < 16; i++) {
-            inMatrix[i] = f1 + static_cast<float>(i);
-        }
-        std::vector<float> outMatrix(16, 0.0f);
-        algorithm.TransformCoordinateSystem(inMatrix, axisX, axisY, outMatrix);
-    }
-    // Valid axes: axis values 1,2,3 with optional 0x80 bit
-    {
-        std::vector<float> inMatrix = { f1, f2, f3, f4, f5, f6, f7, f8, f9 };
-        std::vector<float> outMatrix(9, 0.0f);
-        algorithm.TransformCoordinateSystem(inMatrix, 1, 2, outMatrix);
-        algorithm.TransformCoordinateSystem(inMatrix, 1, 3, outMatrix);
-        algorithm.TransformCoordinateSystem(inMatrix, 2, 1, outMatrix);
-        algorithm.TransformCoordinateSystem(inMatrix, 2, 3, outMatrix);
-        algorithm.TransformCoordinateSystem(inMatrix, 3, 1, outMatrix);
-        algorithm.TransformCoordinateSystem(inMatrix, 3, 2, outMatrix);
-    }
-    // Same in/out matrix (copy path)
-    {
-        std::vector<float> matrix = { f1, f2, f3, f4, f5, f6, f7, f8, f9 };
-        algorithm.TransformCoordinateSystem(matrix, 1, 2, matrix);
-    }
-    // Invalid: negative axes
-    {
-        std::vector<float> inMatrix = { f1, f2, f3, f4, f5, f6, f7, f8, f9 };
-        std::vector<float> outMatrix(9, 0.0f);
-        algorithm.TransformCoordinateSystem(inMatrix, -1, -2, outMatrix);
-    }
-    // Invalid: wrong matrix size
-    {
-        std::vector<float> inMatrix = { f1, f2, f3 };
-        std::vector<float> outMatrix(3, 0.0f);
-        algorithm.TransformCoordinateSystem(inMatrix, 1, 2, outMatrix);
-    }
-    // Invalid: mismatched sizes
-    {
-        std::vector<float> inMatrix(9, f1);
-        std::vector<float> outMatrix(16, 0.0f);
-        algorithm.TransformCoordinateSystem(inMatrix, 1, 2, outMatrix);
-    }
-
-    // ===== 4. GetAltitude =====
-    {
-        float altitude = 0.0f;
-        algorithm.GetAltitude(f1, f2, &altitude);
-    }
-    // seaPressure = 0 (division edge)
-    {
-        float altitude = 0.0f;
-        algorithm.GetAltitude(0.0f, f2, &altitude);
-    }
-    // null pointer
-    {
-        algorithm.GetAltitude(f1, f2, nullptr);
-    }
-
-    // ===== 5. GetGeomagneticDip =====
-    // 9-element
-    {
-        std::vector<float> inclinationMatrix = { f1, f2, f3, f4, f5, f6, f7, f8, f9 };
-        float geomagneticDip = 0.0f;
-        algorithm.GetGeomagneticDip(inclinationMatrix, &geomagneticDip);
-    }
-    // 16-element
-    {
-        std::vector<float> inclinationMatrix(16, 0.0f);
-        for (int i = 0; i < 9; i++) {
-            inclinationMatrix[i] = f1 + static_cast<float>(i);
-        }
-        float geomagneticDip = 0.0f;
-        algorithm.GetGeomagneticDip(inclinationMatrix, &geomagneticDip);
-    }
-    // Invalid size
-    {
-        std::vector<float> inclinationMatrix = { f1, f2 };
-        float geomagneticDip = 0.0f;
-        algorithm.GetGeomagneticDip(inclinationMatrix, &geomagneticDip);
-    }
-    // null pointer
-    {
-        std::vector<float> inclinationMatrix(9, 0.0f);
-        algorithm.GetGeomagneticDip(inclinationMatrix, nullptr);
-    }
-
-    // ===== 6. GetAngleModify =====
-    // 9x9
-    {
-        std::vector<float> curMatrix = { f1, f2, f3, f4, f5, f6, f7, f8, f9 };
-        std::vector<float> preMatrix = { f9, f8, f7, f6, f5, f4, f3, f2, f1 };
-        std::vector<float> angleChange(3, 0.0f);
-        algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
-    }
-    // 16x16
-    {
-        std::vector<float> curMatrix(16, f1);
-        std::vector<float> preMatrix(16, f2);
-        std::vector<float> angleChange(3, 0.0f);
-        algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
-    }
-    // Mixed 9x16
-    {
-        std::vector<float> curMatrix(9, f1);
-        std::vector<float> preMatrix(16, f2);
-        std::vector<float> angleChange(3, 0.0f);
-        algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
-    }
-    // Invalid: too short output
-    {
-        std::vector<float> curMatrix(9, f1);
-        std::vector<float> preMatrix(9, f2);
-        std::vector<float> angleChange(2, 0.0f);
-        algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
-    }
-    // Invalid: wrong matrix size
-    {
-        std::vector<float> curMatrix(5, f1);
-        std::vector<float> preMatrix(9, f2);
-        std::vector<float> angleChange(3, 0.0f);
-        algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
-    }
-
-    // ===== 7. GetDirection =====
-    // 9-element
-    {
-        std::vector<float> rotationMatrix = { f1, f2, f3, f4, f5, f6, f7, f8, f9 };
-        std::vector<float> rotationAngle(3, 0.0f);
-        algorithm.GetDirection(rotationMatrix, rotationAngle);
-    }
-    // 16-element
-    {
-        std::vector<float> rotationMatrix(16, f1);
-        std::vector<float> rotationAngle(3, 0.0f);
-        algorithm.GetDirection(rotationMatrix, rotationAngle);
-    }
-    // Invalid
-    {
-        std::vector<float> rotationMatrix(5, f1);
-        std::vector<float> rotationAngle(3, 0.0f);
-        algorithm.GetDirection(rotationMatrix, rotationAngle);
-    }
-    {
-        std::vector<float> rotationMatrix(9, f1);
-        std::vector<float> rotationAngle(2, 0.0f);
-        algorithm.GetDirection(rotationMatrix, rotationAngle);
-    }
-
-    // ===== 8. CreateRotationAndInclination =====
-    {
-        std::vector<float> gravity = { 0.0f, 0.0f, 9.81f };
-        std::vector<float> geomagnetic = { f1, f2, f3 };
-        std::vector<float> rotationMatrix(9, 0.0f);
-        std::vector<float> inclinationMatrix(9, 0.0f);
-        algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
-    }
-    // 16-element outputs
-    {
-        std::vector<float> gravity = { 0.0f, 0.0f, 9.81f };
-        std::vector<float> geomagnetic = { f4, f5, f6 };
-        std::vector<float> rotationMatrix(16, 0.0f);
-        std::vector<float> inclinationMatrix(16, 0.0f);
-        algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
-    }
-    // With fuzzed gravity
-    {
-        std::vector<float> gravity = { f1, f2, f3 };
-        std::vector<float> geomagnetic = { f4, f5, f6 };
-        std::vector<float> rotationMatrix(9, 0.0f);
-        std::vector<float> inclinationMatrix(9, 0.0f);
-        algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
-    }
-    // Invalid: too short inputs
-    {
-        std::vector<float> gravity = { f1, f2 };
-        std::vector<float> geomagnetic = { f3 };
-        std::vector<float> rotationMatrix(9, 0.0f);
-        std::vector<float> inclinationMatrix(9, 0.0f);
-        algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
-    }
-    // Invalid: wrong output sizes
-    {
-        std::vector<float> gravity = { f1, f2, f3 };
-        std::vector<float> geomagnetic = { f4, f5, f6 };
-        std::vector<float> rotationMatrix(5, 0.0f);
-        std::vector<float> inclinationMatrix(9, 0.0f);
-        algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
-    }
-    // Zero gravity (should fail totalGravity check)
-    {
-        std::vector<float> gravity = { 0.0f, 0.0f, 0.0f };
-        std::vector<float> geomagnetic = { f4, f5, f6 };
-        std::vector<float> rotationMatrix(9, 0.0f);
-        std::vector<float> inclinationMatrix(9, 0.0f);
-        algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
-    }
-
-    // ===== 9. GeomagneticField =====
-    {
-        // Clamp values to reasonable ranges to avoid extreme computation
-        float latitude = f1;
-        float longitude = f2;
-        float altitude = f3;
-        // Construct the geomagnetic field object
-        GeomagneticField geoField(latitude, longitude, altitude, timeMillis);
-        geoField.ObtainX();
-        geoField.ObtainY();
-        geoField.ObtainZ();
-        geoField.ObtainGeomagneticDip();
-        geoField.ObtainDeflectionAngle();
-        geoField.ObtainLevelIntensity();
-        geoField.ObtainTotalIntensity();
-    }
-    // Edge case: extreme latitude/longitude
-    {
-        GeomagneticField geoField(90.0f, 180.0f, 0.0f, timeMillis);
-        geoField.ObtainX();
-        geoField.ObtainY();
-        geoField.ObtainZ();
-    }
-    {
-        GeomagneticField geoField(-90.0f, -180.0f, 100000.0f, timeMillis);
-        geoField.ObtainGeomagneticDip();
-        geoField.ObtainDeflectionAngle();
-        geoField.ObtainLevelIntensity();
-        geoField.ObtainTotalIntensity();
-    }
-
+    TestCreateQuaternion(algorithm, input);
+    TestCreateRotationMatrix(algorithm, input);
+    TestTransformCoordinateSystemCommon(algorithm, input);
+    TestTransformCoordinateSystemEdge(algorithm, input);
+    TestGetAltitude(algorithm, input);
+    TestGetGeomagneticDip(algorithm, input);
+    TestGetAngleModifyCommon(algorithm, input);
+    TestGetAngleModifyEdge(algorithm, input);
+    TestGetDirection(algorithm, input);
+    TestCreateRotationAndInclinationCommon(algorithm, input);
+    TestCreateRotationAndInclinationEdge(algorithm, input);
+    TestGeomagneticFieldCommon(input);
+    TestGeomagneticFieldEdge(input);
     return true;
 }
 }  // namespace Sensors

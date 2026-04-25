@@ -17,6 +17,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <unordered_map>
+#include <vector>
 
 #include "accesstoken_kit.h"
 #include "nativetoken_kit.h"
@@ -40,7 +42,36 @@ constexpr int32_t TEST_UID = 2000;
 constexpr int32_t TEST_DEVICE_ID = 0;
 constexpr int32_t TEST_SENSOR_ID = 0;
 constexpr int32_t TEST_LOCATION = 1;
-} // namespace
+constexpr int32_t SENSOR_ON_CHANGE_MODE = 1;
+constexpr int32_t SENSOR_ONE_SHOT_MODE = 2;
+constexpr int32_t UNKNOWN_SENSOR_OFFSET = 999;
+constexpr int64_t MIN_SAMPLE_PERIOD_NS = 100000;
+constexpr int64_t MAX_SAMPLE_PERIOD_NS = 1000000000;
+constexpr int32_t DEFAULT_FIFO_MAX_EVENT_COUNT = 100;
+constexpr uint64_t DEFAULT_PERIOD_COUNT = 1;
+constexpr uint64_t DEFAULT_FIFO_COUNT = 3;
+constexpr uint64_t FIFO_EXTRA_EVENTS = 2;
+
+struct SensorDataProcesserFuzzInput {
+    int32_t sensorType = 0;
+    uint32_t mode = 0;
+    float sensorValue = 0.0f;
+    int64_t timestamp = 0;
+    int64_t samplingPeriodNs = 0;
+    int64_t maxReportDelayNs = 0;
+    uint64_t periodCount = 0;
+    uint64_t fifoCount = 0;
+};
+
+struct SensorDataSpec {
+    int32_t sensorType = 0;
+    int32_t deviceId = 0;
+    int32_t sensorId = 0;
+    int32_t location = 0;
+    uint32_t mode = 0;
+    float value = 0.0f;
+    int64_t timestamp = 0;
+};
 
 template<class T>
 size_t GetObject(T &object, const uint8_t *data, size_t size)
@@ -54,6 +85,19 @@ size_t GetObject(T &object, const uint8_t *data, size_t size)
         return 0;
     }
     return objectSize;
+}
+
+void ReadFuzzInput(const uint8_t *data, size_t size, SensorDataProcesserFuzzInput &input)
+{
+    size_t startPos = 0;
+    startPos += GetObject<int32_t>(input.sensorType, data + startPos, size - startPos);
+    startPos += GetObject<uint32_t>(input.mode, data + startPos, size - startPos);
+    startPos += GetObject<float>(input.sensorValue, data + startPos, size - startPos);
+    startPos += GetObject<int64_t>(input.timestamp, data + startPos, size - startPos);
+    startPos += GetObject<int64_t>(input.samplingPeriodNs, data + startPos, size - startPos);
+    startPos += GetObject<int64_t>(input.maxReportDelayNs, data + startPos, size - startPos);
+    startPos += GetObject<uint64_t>(input.periodCount, data + startPos, size - startPos);
+    startPos += GetObject<uint64_t>(input.fifoCount, data + startPos, size - startPos);
 }
 
 void SetUpTestCase()
@@ -80,264 +124,223 @@ void SetUpTestCase()
     delete[] perms;
 }
 
-static SensorData MakeSensorData(int32_t sensorType, int32_t deviceId, int32_t sensorId,
-    int32_t location, uint32_t mode, float value, int64_t timestamp)
+SensorData MakeSensorData(const SensorDataSpec &spec)
 {
     SensorData data;
     (void)memset_s(&data, sizeof(data), 0, sizeof(data));
-    data.sensorTypeId = sensorType;
-    data.deviceId = deviceId;
-    data.sensorId = sensorId;
-    data.location = location;
-    data.mode = mode;
-    data.timestamp = timestamp;
+    data.sensorTypeId = spec.sensorType;
+    data.deviceId = spec.deviceId;
+    data.sensorId = spec.sensorId;
+    data.location = spec.location;
+    data.mode = spec.mode;
+    data.timestamp = spec.timestamp;
     data.dataLen = sizeof(float);
-    (void)memcpy_s(data.data, sizeof(data.data), &value, sizeof(float));
+    (void)memcpy_s(data.data, sizeof(data.data), &spec.value, sizeof(float));
     return data;
 }
 
-bool SensorDataProcesserFuzzTest(const uint8_t *data, size_t size)
+SensorDescription BuildSensorDesc(int32_t sensorType)
 {
-    SetUpTestCase();
-    size_t startPos = 0;
-
-    int32_t sensorType = 0;
-    startPos += GetObject<int32_t>(sensorType, data + startPos, size - startPos);
-    uint32_t mode = 0;
-    startPos += GetObject<uint32_t>(mode, data + startPos, size - startPos);
-    float sensorValue = 0.0f;
-    startPos += GetObject<float>(sensorValue, data + startPos, size - startPos);
-    int64_t timestamp = 0;
-    startPos += GetObject<int64_t>(timestamp, data + startPos, size - startPos);
-    int64_t samplingPeriodNs = 0;
-    startPos += GetObject<int64_t>(samplingPeriodNs, data + startPos, size - startPos);
-    int64_t maxReportDelayNs = 0;
-    startPos += GetObject<int64_t>(maxReportDelayNs, data + startPos, size - startPos);
-    uint64_t periodCount = 0;
-    startPos += GetObject<uint64_t>(periodCount, data + startPos, size - startPos);
-    uint64_t fifoCount = 0;
-    startPos += GetObject<uint64_t>(fifoCount, data + startPos, size - startPos);
-
     SensorDescription sensorDesc {
         .deviceId = TEST_DEVICE_ID,
         .sensorType = sensorType,
         .sensorId = TEST_SENSOR_ID,
         .location = TEST_LOCATION
     };
+    return sensorDesc;
+}
 
-    // Build a sensor map with the fuzzed sensor type
+std::unordered_map<SensorDescription, Sensor> BuildSensorMap(const SensorDescription &sensorDesc,
+    int32_t sensorType, uint32_t mode)
+{
     Sensor sensor;
     sensor.SetSensorTypeId(sensorType);
     sensor.SetDeviceId(TEST_DEVICE_ID);
     sensor.SetSensorId(TEST_SENSOR_ID);
     sensor.SetLocation(TEST_LOCATION);
     sensor.SetFlags(mode);
-    sensor.SetMinSamplePeriodNs(100000);
-    sensor.SetMaxSamplePeriodNs(1000000000);
-    sensor.SetFifoMaxEventCount(100);
+    sensor.SetMinSamplePeriodNs(MIN_SAMPLE_PERIOD_NS);
+    sensor.SetMaxSamplePeriodNs(MAX_SAMPLE_PERIOD_NS);
+    sensor.SetFifoMaxEventCount(DEFAULT_FIFO_MAX_EVENT_COUNT);
 
     std::unordered_map<SensorDescription, Sensor> sensorMap;
-    sensorMap.insert(std::make_pair(sensorDesc, sensor));
+    sensorMap.emplace(sensorDesc, sensor);
+    return sensorMap;
+}
 
-    // Create the SensorDataProcesser
+sptr<SensorBasicDataChannel> PrepareClientInfo(ClientInfo &clientInfo, const SensorDescription &sensorDesc,
+    int64_t samplingPeriodNs, int64_t maxReportDelayNs)
+{
+    clientInfo.UpdateAppThreadInfo(TEST_PID, TEST_UID, 0);
+
+    sptr<SensorBasicDataChannel> channel = new (std::nothrow) SensorBasicDataChannel();
+    if (channel == nullptr) {
+        return nullptr;
+    }
+    channel->CreateSensorBasicChannel();
+    channel->SetSensorStatus(true);
+    clientInfo.UpdateSensorChannel(TEST_PID, channel);
+
+    SensorBasicInfo sensorInfo;
+    sensorInfo.SetSamplingPeriodNs(samplingPeriodNs <= 0 ? MIN_SAMPLE_PERIOD_NS : samplingPeriodNs);
+    sensorInfo.SetMaxReportDelayNs(maxReportDelayNs);
+    sensorInfo.SetSensorState(true);
+    clientInfo.UpdateSensorInfo(sensorDesc, TEST_PID, sensorInfo);
+    return channel;
+}
+
+void RunSendRawDataTests(const sptr<SensorDataProcesser> &processer,
+    const sptr<SensorBasicDataChannel> &channel, const SensorData &sensorData)
+{
+    std::unordered_map<SensorDescription, SensorData> cacheBuf;
+    std::vector<SensorData> events = { sensorData };
+    processer->SendRawData(cacheBuf, channel, events);
+
+    events.clear();
+    processer->SendRawData(cacheBuf, channel, events);
+
+    sptr<SensorBasicDataChannel> nullChannel = nullptr;
+    events.push_back(sensorData);
+    processer->SendRawData(cacheBuf, nullChannel, events);
+}
+
+void RunReportNotContinuousDataTests(const sptr<SensorDataProcesser> &processer,
+    const sptr<SensorBasicDataChannel> &channel, const SensorData &sensorData, int32_t sensorType)
+{
+    std::unordered_map<SensorDescription, SensorData> cacheBuf;
+    SensorData onChangeData = sensorData;
+    onChangeData.mode = SENSOR_ON_CHANGE_MODE;
+    processer->ReportNotContinuousData(cacheBuf, channel, onChangeData);
+
+    SensorData oneShotData = sensorData;
+    oneShotData.mode = SENSOR_ONE_SHOT_MODE;
+    processer->ReportNotContinuousData(cacheBuf, channel, oneShotData);
+
+    SensorData continuousData = sensorData;
+    continuousData.mode = 0;
+    processer->ReportNotContinuousData(cacheBuf, channel, continuousData);
+
+    SensorData unknownData = sensorData;
+    unknownData.sensorTypeId = sensorType + UNKNOWN_SENSOR_OFFSET;
+    processer->ReportNotContinuousData(cacheBuf, channel, unknownData);
+}
+
+void RunNoneFifoCacheDataTests(const sptr<SensorDataProcesser> &processer,
+    const sptr<SensorBasicDataChannel> &channel, const SensorData &sensorData, uint64_t periodCount)
+{
+    std::unordered_map<SensorDescription, SensorData> cacheBuf;
+    uint64_t currentPeriodCount = (periodCount == 0) ? DEFAULT_PERIOD_COUNT : periodCount;
+    processer->SendNoneFifoCacheData(cacheBuf, channel, sensorData, currentPeriodCount);
+    processer->SendNoneFifoCacheData(cacheBuf, channel, sensorData, currentPeriodCount);
+    processer->SendNoneFifoCacheData(cacheBuf, channel, sensorData, 0);
+
+    sptr<SensorBasicDataChannel> channel2 = new (std::nothrow) SensorBasicDataChannel();
+    if (channel2 != nullptr) {
+        channel2->CreateSensorBasicChannel();
+        channel2->SetSensorStatus(true);
+        processer->SendNoneFifoCacheData(cacheBuf, channel, sensorData, DEFAULT_PERIOD_COUNT);
+        processer->SendNoneFifoCacheData(cacheBuf, channel2, sensorData, DEFAULT_PERIOD_COUNT);
+    }
+}
+
+void RunFifoCacheDataTests(const std::unordered_map<SensorDescription, Sensor> &sensorMap,
+    const sptr<SensorBasicDataChannel> &channel, const SensorData &sensorData,
+    uint64_t periodCount, uint64_t fifoCount, int64_t timestamp)
+{
+    sptr<SensorDataProcesser> processer = new (std::nothrow) SensorDataProcesser(sensorMap);
+    if (processer == nullptr) {
+        return;
+    }
+
+    std::unordered_map<SensorDescription, SensorData> cacheBuf;
+    uint64_t currentPeriodCount = (periodCount == 0) ? DEFAULT_PERIOD_COUNT : periodCount;
+    uint64_t currentFifoCount = (fifoCount <= DEFAULT_PERIOD_COUNT) ? DEFAULT_FIFO_COUNT : fifoCount;
+    processer->SendFifoCacheData(cacheBuf, channel, sensorData, currentPeriodCount, currentFifoCount);
+    for (uint64_t index = 0; index < currentFifoCount + FIFO_EXTRA_EVENTS; ++index) {
+        SensorData currentData = sensorData;
+        currentData.timestamp = timestamp + static_cast<int64_t>(index);
+        processer->SendFifoCacheData(cacheBuf, channel, currentData, currentPeriodCount, currentFifoCount);
+    }
+}
+
+void RunCacheAndSendEventTests(const sptr<SensorDataProcesser> &processer,
+    const sptr<SensorBasicDataChannel> &channel, const SensorData &sensorData,
+    const SensorDescription &sensorDesc)
+{
+    processer->CacheSensorEvent(sensorData, channel);
+
+    auto &cacheBuf = const_cast<std::unordered_map<SensorDescription, SensorData> &>(channel->GetDataCacheBuf());
+    cacheBuf[sensorDesc] = sensorData;
+    processer->CacheSensorEvent(sensorData, channel);
+    cacheBuf.clear();
+
+    sptr<SensorBasicDataChannel> nullChannel = nullptr;
+    processer->CacheSensorEvent(sensorData, nullChannel);
+    processer->ReportData(channel, sensorData);
+    processer->ReportData(nullChannel, sensorData);
+    processer->SendEvents(channel, sensorData);
+    processer->SendEvents(nullChannel, sensorData);
+}
+
+void RunUpdateSensorMapAndFilterTests(const sptr<SensorDataProcesser> &processer,
+    int32_t sensorType, const SensorData &sensorData)
+{
+    Sensor sensor;
+    sensor.SetSensorTypeId(sensorType + 1);
+    sensor.SetDeviceId(TEST_DEVICE_ID);
+    sensor.SetSensorId(TEST_SENSOR_ID + 1);
+    sensor.SetLocation(TEST_LOCATION);
+
+    SensorDescription sensorDesc { TEST_DEVICE_ID, sensorType + 1, TEST_SENSOR_ID + 1, TEST_LOCATION };
+    std::unordered_map<SensorDescription, Sensor> sensorMap;
+    sensorMap[sensorDesc] = sensor;
+    processer->UpdateSensorMap(sensorMap);
+
+    sptr<ReportDataCallback> callback = new (std::nothrow) ReportDataCallback();
+    if (callback != nullptr) {
+        auto &eventsBuf = callback->GetEventData();
+        if (eventsBuf.circularBuf != nullptr) {
+            eventsBuf.circularBuf[0] = sensorData;
+            eventsBuf.readPos = 0;
+            eventsBuf.writePosition = 1;
+            eventsBuf.eventNum = 1;
+            processer->EventFilter(eventsBuf);
+        }
+    }
+}
+} // namespace
+
+bool SensorDataProcesserFuzzTest(const uint8_t *data, size_t size)
+{
+    SetUpTestCase();
+
+    SensorDataProcesserFuzzInput input;
+    ReadFuzzInput(data, size, input);
+
+    SensorDescription sensorDesc = BuildSensorDesc(input.sensorType);
+    std::unordered_map<SensorDescription, Sensor> sensorMap = BuildSensorMap(sensorDesc, input.sensorType, input.mode);
     sptr<SensorDataProcesser> processer = new (std::nothrow) SensorDataProcesser(sensorMap);
     if (processer == nullptr) {
         return false;
     }
 
-    // Set up ClientInfo with channel and sensor info for the test pid
     ClientInfo &clientInfo = ClientInfo::GetInstance();
-    clientInfo.UpdateAppThreadInfo(TEST_PID, TEST_UID, 0);
-
-    sptr<SensorBasicDataChannel> channel = new (std::nothrow) SensorBasicDataChannel();
+    sptr<SensorBasicDataChannel> channel = PrepareClientInfo(clientInfo, sensorDesc,
+        input.samplingPeriodNs, input.maxReportDelayNs);
     if (channel == nullptr) {
         return false;
     }
-    // Create actual socket pair so SendData won't fail on invalid fd
-    channel->CreateSensorBasicChannel();
-    channel->SetSensorStatus(true);
 
-    clientInfo.UpdateSensorChannel(TEST_PID, channel);
-
-    SensorBasicInfo sensorInfo;
-    if (samplingPeriodNs <= 0) {
-        samplingPeriodNs = 100000;
-    }
-    sensorInfo.SetSamplingPeriodNs(samplingPeriodNs);
-    sensorInfo.SetMaxReportDelayNs(maxReportDelayNs);
-    sensorInfo.SetSensorState(true);
-    clientInfo.UpdateSensorInfo(sensorDesc, TEST_PID, sensorInfo);
-
-    SensorData sensorData = MakeSensorData(sensorType, TEST_DEVICE_ID, TEST_SENSOR_ID,
-        TEST_LOCATION, mode, sensorValue, timestamp);
-
-    // ===== 1. SendRawData =====
-    {
-        std::unordered_map<SensorDescription, SensorData> cacheBuf;
-        std::vector<SensorData> events;
-        events.push_back(sensorData);
-        processer->SendRawData(cacheBuf, channel, events);
-    }
-    // Empty events
-    {
-        std::unordered_map<SensorDescription, SensorData> cacheBuf;
-        std::vector<SensorData> events;
-        processer->SendRawData(cacheBuf, channel, events);
-    }
-    // Null channel
-    {
-        std::unordered_map<SensorDescription, SensorData> cacheBuf;
-        std::vector<SensorData> events;
-        events.push_back(sensorData);
-        sptr<SensorBasicDataChannel> nullChannel = nullptr;
-        processer->SendRawData(cacheBuf, nullChannel, events);
-    }
-
-    // ===== 2. ReportNotContinuousData =====
-    {
-        std::unordered_map<SensorDescription, SensorData> cacheBuf;
-        // ON_CHANGE mode
-        SensorData onChangeData = sensorData;
-        onChangeData.mode = 1;  // SENSOR_ON_CHANGE
-        processer->ReportNotContinuousData(cacheBuf, channel, onChangeData);
-    }
-    {
-        std::unordered_map<SensorDescription, SensorData> cacheBuf;
-        // ONE_SHOT mode
-        SensorData oneShotData = sensorData;
-        oneShotData.mode = 2;  // SENSOR_ONE_SHOT
-        processer->ReportNotContinuousData(cacheBuf, channel, oneShotData);
-    }
-    {
-        // Continuous mode - should return false
-        std::unordered_map<SensorDescription, SensorData> cacheBuf;
-        SensorData contData = sensorData;
-        contData.mode = 0;
-        processer->ReportNotContinuousData(cacheBuf, channel, contData);
-    }
-    {
-        // Sensor not in map
-        std::unordered_map<SensorDescription, SensorData> cacheBuf;
-        SensorData unknownData = sensorData;
-        unknownData.sensorTypeId = sensorType + 999;
-        processer->ReportNotContinuousData(cacheBuf, channel, unknownData);
-    }
-
-    // ===== 3. SendNoneFifoCacheData =====
-    {
-        std::unordered_map<SensorDescription, SensorData> cacheBuf;
-        uint64_t pc = (periodCount == 0) ? 1 : periodCount;
-        processer->SendNoneFifoCacheData(cacheBuf, channel, sensorData, pc);
-        // Call again - channel should already exist in dataCountMap
-        processer->SendNoneFifoCacheData(cacheBuf, channel, sensorData, pc);
-    }
-    // With periodCount = 0
-    {
-        std::unordered_map<SensorDescription, SensorData> cacheBuf;
-        processer->SendNoneFifoCacheData(cacheBuf, channel, sensorData, 0);
-    }
-    // With a different channel (to test channelExist=false path)
-    {
-        sptr<SensorBasicDataChannel> channel2 = new (std::nothrow) SensorBasicDataChannel();
-        if (channel2 != nullptr) {
-            channel2->CreateSensorBasicChannel();
-            channel2->SetSensorStatus(true);
-            std::unordered_map<SensorDescription, SensorData> cacheBuf;
-            // First call creates entry, second call with different channel hits !channelExist
-            processer->SendNoneFifoCacheData(cacheBuf, channel, sensorData, 1);
-            processer->SendNoneFifoCacheData(cacheBuf, channel2, sensorData, 1);
-        }
-    }
-
-    // ===== 4. SendFifoCacheData =====
-    // Clear dataCountMap by creating a fresh processer
-    {
-        sptr<SensorDataProcesser> processer2 = new (std::nothrow) SensorDataProcesser(sensorMap);
-        if (processer2 != nullptr) {
-            std::unordered_map<SensorDescription, SensorData> cacheBuf;
-            uint64_t pc = (periodCount == 0) ? 1 : periodCount;
-            uint64_t fc = (fifoCount <= 1) ? 3 : fifoCount;
-            // First call - no entry yet
-            processer2->SendFifoCacheData(cacheBuf, channel, sensorData, pc, fc);
-            // Subsequent calls to accumulate fifo
-            for (uint64_t i = 0; i < fc + 2; i++) {
-                SensorData d = sensorData;
-                d.timestamp = timestamp + static_cast<int64_t>(i);
-                processer2->SendFifoCacheData(cacheBuf, channel, d, pc, fc);
-            }
-        }
-    }
-
-    // ===== 5. CacheSensorEvent =====
-    {
-        // No cache - first send
-        processer->CacheSensorEvent(sensorData, channel);
-    }
-    {
-        // With existing cache entry - force a cache entry first
-        auto &cacheBuf = const_cast<std::unordered_map<SensorDescription, SensorData> &>(
-            channel->GetDataCacheBuf());
-        cacheBuf[sensorDesc] = sensorData;
-        processer->CacheSensorEvent(sensorData, channel);
-        cacheBuf.clear();
-    }
-    // Null channel
-    {
-        sptr<SensorBasicDataChannel> nullCh = nullptr;
-        processer->CacheSensorEvent(sensorData, nullCh);
-    }
-
-    // ===== 6. ReportData =====
-    {
-        processer->ReportData(channel, sensorData);
-    }
-    // Null channel
-    {
-        sptr<SensorBasicDataChannel> nullCh = nullptr;
-        processer->ReportData(nullCh, sensorData);
-    }
-
-    // ===== 7. SendEvents =====
-    {
-        processer->SendEvents(channel, sensorData);
-    }
-    // Null channel
-    {
-        sptr<SensorBasicDataChannel> nullCh = nullptr;
-        processer->SendEvents(nullCh, sensorData);
-    }
-
-    // ===== 8. UpdateSensorMap =====
-    {
-        Sensor sensor2;
-        sensor2.SetSensorTypeId(sensorType + 1);
-        sensor2.SetDeviceId(TEST_DEVICE_ID);
-        sensor2.SetSensorId(TEST_SENSOR_ID + 1);
-        sensor2.SetLocation(TEST_LOCATION);
-        std::unordered_map<SensorDescription, Sensor> newMap;
-        SensorDescription desc2 {TEST_DEVICE_ID, sensorType + 1, TEST_SENSOR_ID + 1, TEST_LOCATION};
-        newMap[desc2] = sensor2;
-        processer->UpdateSensorMap(newMap);
-    }
-
-    // ===== 9. EventFilter - requires CircularEventBuf =====
-    {
-        sptr<ReportDataCallback> callback = new (std::nothrow) ReportDataCallback();
-        if (callback != nullptr) {
-            auto &eventsBuf = callback->GetEventData();
-            if (eventsBuf.circularBuf != nullptr) {
-                eventsBuf.circularBuf[0] = sensorData;
-                eventsBuf.readPos = 0;
-                eventsBuf.writePosition = 1;
-                eventsBuf.eventNum = 1;
-                processer->EventFilter(eventsBuf);
-            }
-        }
-    }
-
-    // Cleanup
+    SensorDataSpec dataSpec { input.sensorType, TEST_DEVICE_ID, TEST_SENSOR_ID, TEST_LOCATION,
+        input.mode, input.sensorValue, input.timestamp };
+    SensorData sensorData = MakeSensorData(dataSpec);
+    RunSendRawDataTests(processer, channel, sensorData);
+    RunReportNotContinuousDataTests(processer, channel, sensorData, input.sensorType);
+    RunNoneFifoCacheDataTests(processer, channel, sensorData, input.periodCount);
+    RunFifoCacheDataTests(sensorMap, channel, sensorData, input.periodCount, input.fifoCount, input.timestamp);
+    RunCacheAndSendEventTests(processer, channel, sensorData, sensorDesc);
+    RunUpdateSensorMapAndFilterTests(processer, input.sensorType, sensorData);
     clientInfo.DestroySensorChannel(TEST_PID);
-
     return true;
 }
 }  // namespace Sensors

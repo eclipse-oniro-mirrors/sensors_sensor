@@ -15,9 +15,9 @@
 
 #include "geomagneticfield_fuzzer.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cmath>
 
 #include "securec.h"
 
@@ -27,7 +27,26 @@ namespace OHOS {
 namespace Sensors {
 namespace {
 constexpr size_t U32_AT_SIZE = 4;
-} // namespace
+constexpr float MAX_LATITUDE = 90.0f;
+constexpr float MAX_LONGITUDE = 180.0f;
+constexpr float NEAR_POLE_LATITUDE = 89.99f;
+constexpr float OUT_OF_RANGE_LATITUDE = 200.0f;
+constexpr float ZERO_ALTITUDE = 0.0f;
+constexpr float HIGH_ALTITUDE = 100000.0f;
+constexpr float NEGATIVE_ALTITUDE = -1000.0f;
+constexpr float DEFAULT_LATITUDE = 30.0f;
+constexpr float DEFAULT_LONGITUDE = 120.0f;
+constexpr float DEFAULT_ALTITUDE = 500.0f;
+constexpr int64_t BASE_TIME_MILLIS = 1580486400000LL;
+constexpr int64_t FUTURE_TIME_MILLIS = 1700000000000LL;
+constexpr int64_t PAST_TIME_MILLIS = 1000000000000LL;
+
+struct GeomagneticFieldFuzzInput {
+    float latitude = 0.0f;
+    float longitude = 0.0f;
+    float altitude = 0.0f;
+    int64_t timeMillis = 0;
+};
 
 template<class T>
 size_t GetObject(T &object, const uint8_t *data, size_t size)
@@ -43,172 +62,118 @@ size_t GetObject(T &object, const uint8_t *data, size_t size)
     return objectSize;
 }
 
-bool GeomagneticFieldFuzzTest(const uint8_t *data, size_t size)
+void ReadFuzzInput(const uint8_t *data, size_t size, GeomagneticFieldFuzzInput &input)
 {
     size_t startPos = 0;
+    startPos += GetObject<float>(input.latitude, data + startPos, size - startPos);
+    startPos += GetObject<float>(input.longitude, data + startPos, size - startPos);
+    startPos += GetObject<float>(input.altitude, data + startPos, size - startPos);
+    startPos += GetObject<int64_t>(input.timeMillis, data + startPos, size - startPos);
+}
 
-    float latitude = 0.0f;
-    startPos += GetObject<float>(latitude, data + startPos, size - startPos);
-    float longitude = 0.0f;
-    startPos += GetObject<float>(longitude, data + startPos, size - startPos);
-    float altitude = 0.0f;
-    startPos += GetObject<float>(altitude, data + startPos, size - startPos);
-    int64_t timeMillis = 0;
-    startPos += GetObject<int64_t>(timeMillis, data + startPos, size - startPos);
+void SanitizeInput(GeomagneticFieldFuzzInput &input)
+{
+    if (std::isnan(input.latitude) || std::isinf(input.latitude)) {
+        input.latitude = 0.0f;
+    }
+    if (std::isnan(input.longitude) || std::isinf(input.longitude)) {
+        input.longitude = 0.0f;
+    }
+    if (std::isnan(input.altitude) || std::isinf(input.altitude)) {
+        input.altitude = 0.0f;
+    }
+}
 
-    // Filter out NaN/Inf to avoid infinite loops in trig functions
-    if (std::isnan(latitude) || std::isinf(latitude)) {
-        latitude = 0.0f;
-    }
-    if (std::isnan(longitude) || std::isinf(longitude)) {
-        longitude = 0.0f;
-    }
-    if (std::isnan(altitude) || std::isinf(altitude)) {
-        altitude = 0.0f;
-    }
+void RunGeneralAndLatitudeTests(const GeomagneticFieldFuzzInput &input)
+{
+    GeomagneticField geoField(input.latitude, input.longitude, input.altitude, input.timeMillis);
+    geoField.ObtainX();
+    geoField.ObtainY();
+    geoField.ObtainZ();
+    geoField.ObtainGeomagneticDip();
+    geoField.ObtainDeflectionAngle();
+    geoField.ObtainLevelIntensity();
+    geoField.ObtainTotalIntensity();
 
-    // ===== 1. Fuzzed input - exercises constructor, CalibrateGeocentricCoordinates,
-    //          InitLegendreTable, GetRelativeRadiusPower, GetLongitudeTrigonometric,
-    //          CalculateGeomagneticComponent =====
-    {
-        GeomagneticField geoField(latitude, longitude, altitude, timeMillis);
-        geoField.ObtainX();
-        geoField.ObtainY();
-        geoField.ObtainZ();
-        geoField.ObtainGeomagneticDip();
-        geoField.ObtainDeflectionAngle();
-        geoField.ObtainLevelIntensity();
-        geoField.ObtainTotalIntensity();
-    }
+    GeomagneticField northField(NEAR_POLE_LATITUDE, input.longitude, input.altitude, input.timeMillis);
+    northField.ObtainX();
+    northField.ObtainY();
+    northField.ObtainZ();
+    northField.ObtainGeomagneticDip();
 
-    // ===== 2. Boundary: max latitude (near 90) =====
-    {
-        GeomagneticField geoField(89.99f, longitude, altitude, timeMillis);
-        geoField.ObtainX();
-        geoField.ObtainY();
-        geoField.ObtainZ();
-        geoField.ObtainGeomagneticDip();
-        geoField.ObtainDeflectionAngle();
-        geoField.ObtainLevelIntensity();
-        geoField.ObtainTotalIntensity();
-    }
+    GeomagneticField southField(-NEAR_POLE_LATITUDE, input.longitude, input.altitude, input.timeMillis);
+    southField.ObtainX();
+    southField.ObtainY();
+    southField.ObtainZ();
+    southField.ObtainGeomagneticDip();
+}
 
-    // ===== 3. Boundary: min latitude (near -90) =====
-    {
-        GeomagneticField geoField(-89.99f, longitude, altitude, timeMillis);
-        geoField.ObtainX();
-        geoField.ObtainY();
-        geoField.ObtainZ();
-        geoField.ObtainGeomagneticDip();
-        geoField.ObtainDeflectionAngle();
-        geoField.ObtainLevelIntensity();
-        geoField.ObtainTotalIntensity();
-    }
+void RunBoundaryAndAltitudeTests(const GeomagneticFieldFuzzInput &input)
+{
+    GeomagneticField northPole(MAX_LATITUDE, MAX_LONGITUDE, ZERO_ALTITUDE, input.timeMillis);
+    northPole.ObtainX();
+    northPole.ObtainY();
+    northPole.ObtainZ();
 
-    // ===== 4. Boundary: exact 90/-90 (precision clamp path) =====
-    {
-        GeomagneticField geoField(90.0f, 180.0f, 0.0f, timeMillis);
-        geoField.ObtainX();
-        geoField.ObtainY();
-        geoField.ObtainZ();
-    }
-    {
-        GeomagneticField geoField(-90.0f, -180.0f, 0.0f, timeMillis);
-        geoField.ObtainGeomagneticDip();
-        geoField.ObtainDeflectionAngle();
-        geoField.ObtainLevelIntensity();
-        geoField.ObtainTotalIntensity();
-    }
+    GeomagneticField southPole(-MAX_LATITUDE, -MAX_LONGITUDE, ZERO_ALTITUDE, input.timeMillis);
+    southPole.ObtainGeomagneticDip();
+    southPole.ObtainDeflectionAngle();
+    southPole.ObtainLevelIntensity();
+    southPole.ObtainTotalIntensity();
 
-    // ===== 5. Beyond latitude bounds (clamp to ±90-precision) =====
-    {
-        GeomagneticField geoField(200.0f, 0.0f, 0.0f, timeMillis);
-        geoField.ObtainX();
-    }
-    {
-        GeomagneticField geoField(-200.0f, 0.0f, 0.0f, timeMillis);
-        geoField.ObtainY();
-    }
+    GeomagneticField highLatitude(OUT_OF_RANGE_LATITUDE, 0.0f, ZERO_ALTITUDE, input.timeMillis);
+    highLatitude.ObtainX();
+    GeomagneticField lowLatitude(-OUT_OF_RANGE_LATITUDE, 0.0f, ZERO_ALTITUDE, input.timeMillis);
+    lowLatitude.ObtainY();
 
-    // ===== 6. Zero altitude =====
-    {
-        GeomagneticField geoField(45.0f, 90.0f, 0.0f, timeMillis);
-        geoField.ObtainZ();
-        geoField.ObtainTotalIntensity();
-    }
+    GeomagneticField zeroAltitude(45.0f, 90.0f, ZERO_ALTITUDE, input.timeMillis);
+    zeroAltitude.ObtainZ();
+    zeroAltitude.ObtainTotalIntensity();
+}
 
-    // ===== 7. Very high altitude =====
-    {
-        GeomagneticField geoField(0.0f, 0.0f, 100000.0f, timeMillis);
-        geoField.ObtainX();
-        geoField.ObtainLevelIntensity();
-    }
+void RunAltitudeTimeAndLongitudeTests(const GeomagneticFieldFuzzInput &input)
+{
+    GeomagneticField highAltitude(0.0f, 0.0f, HIGH_ALTITUDE, input.timeMillis);
+    highAltitude.ObtainX();
+    highAltitude.ObtainLevelIntensity();
+    GeomagneticField negativeAltitude(0.0f, 0.0f, NEGATIVE_ALTITUDE, input.timeMillis);
+    negativeAltitude.ObtainY();
+    negativeAltitude.ObtainDeflectionAngle();
 
-    // ===== 8. Negative altitude =====
-    {
-        GeomagneticField geoField(0.0f, 0.0f, -1000.0f, timeMillis);
-        geoField.ObtainY();
-        geoField.ObtainDeflectionAngle();
-    }
+    GeomagneticField baseTime(DEFAULT_LATITUDE, DEFAULT_LONGITUDE, DEFAULT_ALTITUDE, BASE_TIME_MILLIS);
+    baseTime.ObtainX();
+    baseTime.ObtainY();
+    baseTime.ObtainZ();
+    GeomagneticField futureTime(DEFAULT_LATITUDE, DEFAULT_LONGITUDE, DEFAULT_ALTITUDE, FUTURE_TIME_MILLIS);
+    futureTime.ObtainGeomagneticDip();
+    GeomagneticField pastTime(DEFAULT_LATITUDE, DEFAULT_LONGITUDE, DEFAULT_ALTITUDE, PAST_TIME_MILLIS);
+    pastTime.ObtainDeflectionAngle();
+    GeomagneticField zeroTime(DEFAULT_LATITUDE, DEFAULT_LONGITUDE, DEFAULT_ALTITUDE, 0);
+    zeroTime.ObtainTotalIntensity();
 
-    // ===== 9. Different timeMillis values =====
-    {
-        // Base WMM time
-        GeomagneticField geoField(30.0f, 120.0f, 500.0f, 1580486400000LL);
-        geoField.ObtainX();
-        geoField.ObtainY();
-        geoField.ObtainZ();
-    }
-    {
-        // Future time
-        GeomagneticField geoField(30.0f, 120.0f, 500.0f, 1700000000000LL);
-        geoField.ObtainGeomagneticDip();
-    }
-    {
-        // Past time (negative yearsSinceBase)
-        GeomagneticField geoField(30.0f, 120.0f, 500.0f, 1000000000000LL);
-        geoField.ObtainDeflectionAngle();
-    }
-    {
-        // Zero time
-        GeomagneticField geoField(30.0f, 120.0f, 500.0f, 0);
-        geoField.ObtainTotalIntensity();
-    }
+    GeomagneticField equator(0.0f, 0.0f, ZERO_ALTITUDE, input.timeMillis);
+    equator.ObtainX();
+    equator.ObtainY();
+    equator.ObtainZ();
+    equator.ObtainGeomagneticDip();
+    equator.ObtainDeflectionAngle();
+    equator.ObtainLevelIntensity();
+    equator.ObtainTotalIntensity();
+    (void)GeomagneticField(45.0f, 45.0f, ZERO_ALTITUDE, input.timeMillis).ObtainX();
+    (void)GeomagneticField(45.0f, 90.0f, ZERO_ALTITUDE, input.timeMillis).ObtainX();
+    (void)GeomagneticField(45.0f, 135.0f, ZERO_ALTITUDE, input.timeMillis).ObtainX();
+    (void)GeomagneticField(45.0f, -90.0f, ZERO_ALTITUDE, input.timeMillis).ObtainX();
+}
+} // namespace
 
-    // ===== 10. Equator and prime meridian =====
-    {
-        GeomagneticField geoField(0.0f, 0.0f, 0.0f, timeMillis);
-        geoField.ObtainX();
-        geoField.ObtainY();
-        geoField.ObtainZ();
-        geoField.ObtainGeomagneticDip();
-        geoField.ObtainDeflectionAngle();
-        geoField.ObtainLevelIntensity();
-        geoField.ObtainTotalIntensity();
-    }
-
-    // ===== 11. Various longitude values to exercise GetLongitudeTrigonometric =====
-    {
-        GeomagneticField geoField(45.0f, 0.0f, 0.0f, timeMillis);
-        geoField.ObtainX();
-    }
-    {
-        GeomagneticField geoField(45.0f, 45.0f, 0.0f, timeMillis);
-        geoField.ObtainX();
-    }
-    {
-        GeomagneticField geoField(45.0f, 90.0f, 0.0f, timeMillis);
-        geoField.ObtainX();
-    }
-    {
-        GeomagneticField geoField(45.0f, 135.0f, 0.0f, timeMillis);
-        geoField.ObtainX();
-    }
-    {
-        GeomagneticField geoField(45.0f, -90.0f, 0.0f, timeMillis);
-        geoField.ObtainX();
-    }
-
+bool GeomagneticFieldFuzzTest(const uint8_t *data, size_t size)
+{
+    GeomagneticFieldFuzzInput input;
+    ReadFuzzInput(data, size, input);
+    SanitizeInput(input);
+    RunGeneralAndLatitudeTests(input);
+    RunBoundaryAndAltitudeTests(input);
+    RunAltitudeTimeAndLongitudeTests(input);
     return true;
 }
 }  // namespace Sensors

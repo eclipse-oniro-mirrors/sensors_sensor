@@ -205,7 +205,7 @@ void RunSendRawDataTests(const sptr<SensorDataProcesser> &processer,
 }
 
 void RunReportNotContinuousDataTests(const sptr<SensorDataProcesser> &processer,
-    const sptr<SensorBasicDataChannel> &channel, const SensorData &sensorData, int32_t sensorType)
+    sptr<SensorBasicDataChannel> &channel, const SensorData &sensorData, int32_t sensorType)
 {
     std::unordered_map<SensorDescription, SensorData> cacheBuf;
     SensorData onChangeData = sensorData;
@@ -226,7 +226,7 @@ void RunReportNotContinuousDataTests(const sptr<SensorDataProcesser> &processer,
 }
 
 void RunNoneFifoCacheDataTests(const sptr<SensorDataProcesser> &processer,
-    const sptr<SensorBasicDataChannel> &channel, const SensorData &sensorData, uint64_t periodCount)
+    sptr<SensorBasicDataChannel> &channel, SensorData &sensorData, uint64_t periodCount)
 {
     std::unordered_map<SensorDescription, SensorData> cacheBuf;
     uint64_t currentPeriodCount = (periodCount == 0) ? DEFAULT_PERIOD_COUNT : periodCount;
@@ -244,7 +244,7 @@ void RunNoneFifoCacheDataTests(const sptr<SensorDataProcesser> &processer,
 }
 
 void RunFifoCacheDataTests(const std::unordered_map<SensorDescription, Sensor> &sensorMap,
-    const sptr<SensorBasicDataChannel> &channel, const SensorData &sensorData,
+    sptr<SensorBasicDataChannel> &channel, SensorData &sensorData,
     uint64_t periodCount, uint64_t fifoCount, int64_t timestamp)
 {
     sptr<SensorDataProcesser> processer = new (std::nothrow) SensorDataProcesser(sensorMap);
@@ -264,7 +264,7 @@ void RunFifoCacheDataTests(const std::unordered_map<SensorDescription, Sensor> &
 }
 
 void RunCacheAndSendEventTests(const sptr<SensorDataProcesser> &processer,
-    const sptr<SensorBasicDataChannel> &channel, const SensorData &sensorData,
+    sptr<SensorBasicDataChannel> &channel, SensorData &sensorData,
     const SensorDescription &sensorDesc)
 {
     processer->CacheSensorEvent(sensorData, channel);

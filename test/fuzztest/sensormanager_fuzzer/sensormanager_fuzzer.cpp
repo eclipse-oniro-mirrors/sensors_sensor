@@ -42,7 +42,6 @@ constexpr int32_t NEXT_UID = 2002;
 constexpr int32_t ACCELEROMETER_TYPE = 1;
 constexpr int32_t ACCELEROMETER_SENSOR_ID = 1;
 constexpr int32_t DEFAULT_DEVICE_ID = 0;
-constexpr int32_t INVALID_SENSOR_ID = -1;
 constexpr int32_t UNKNOWN_PID = 99999;
 constexpr int64_t DEFAULT_SAMPLING_PERIOD_NS = 10000000;
 constexpr int64_t SENSOR_MIN_SAMPLE_PERIOD_NS = 5000000;
@@ -206,6 +205,15 @@ void RunAfterDisableSensorTests(SensorManager &sensorMgr, ClientInfo &clientInfo
     (void)sensorMgr.AfterDisableSensor(sensorDescProximity);
 }
 
+void InitSensorMapForTest(SensorManager &sensorMgr, const std::unordered_map<SensorDescription, Sensor> &sensorMap)
+{
+#ifdef HDF_DRIVERS_INTERFACE_SENSOR
+    sensorMgr.InitSensorMap(sensorMap, nullptr, nullptr);
+#else
+    sensorMgr.InitSensorMap(sensorMap);
+#endif // HDF_DRIVERS_INTERFACE_SENSOR
+}
+
 void RunGetPackageNameAndInitMapTests(SensorManager &sensorMgr, const SensorDescription &sensorDesc1,
     const Sensor &sensor1, uint32_t tokenIdVal, int64_t samplingPeriodNs, int64_t maxReportDelayNs)
 {
@@ -218,10 +226,10 @@ void RunGetPackageNameAndInitMapTests(SensorManager &sensorMgr, const SensorDesc
 
     std::unordered_map<SensorDescription, Sensor> testMap;
     testMap[sensorDesc1] = sensor1;
-    sensorMgr.InitSensorMap(testMap);
+    InitSensorMapForTest(sensorMgr, testMap);
     std::unordered_map<SensorDescription, Sensor> emptyMap;
-    sensorMgr.InitSensorMap(emptyMap);
-    sensorMgr.InitSensorMap(testMap);
+    InitSensorMapForTest(sensorMgr, emptyMap);
+    InitSensorMapForTest(sensorMgr, testMap);
     (void)sensorMgr.GetSensorInfo(sensorDesc1, samplingPeriodNs, maxReportDelayNs);
 }
 

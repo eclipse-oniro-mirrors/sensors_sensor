@@ -232,7 +232,8 @@ void RunDumpEntryTests(SensorDump &sensorDump, int32_t fd, const std::vector<Sen
     sensorDump.DumpOpeningSensor(fd, sensors, clientInfo);
 }
 
-void RunParseCommandTests(SensorDump &sensorDump, int32_t fd, const std::vector<Sensor> &sensors, ClientInfo &clientInfo)
+void RunParseCommandTests(SensorDump &sensorDump, int32_t fd,
+    const std::vector<Sensor> &sensors, ClientInfo &clientInfo)
 {
     const std::vector<std::vector<std::string>> argumentSets = {
         { "", "-h" },

@@ -43,6 +43,7 @@ constexpr int32_t ACCELEROMETER_TYPE = 1;
 constexpr int32_t ACCELEROMETER_SENSOR_ID = 1;
 constexpr int32_t DEFAULT_DEVICE_ID = 0;
 constexpr int32_t UNKNOWN_PID = 99999;
+constexpr int64_t SHORT_SAMPLING_PERIOD_NS = 1000;
 constexpr int64_t DEFAULT_SAMPLING_PERIOD_NS = 10000000;
 constexpr int64_t SENSOR_MIN_SAMPLE_PERIOD_NS = 5000000;
 constexpr int32_t SENSOR_FIFO_MAX_EVENT_COUNT = 1000;
@@ -54,6 +55,24 @@ struct SensorManagerFuzzInput {
     int64_t maxReportDelayNs = 0;
     uint32_t tokenIdVal = 0;
     int32_t isAccessTokenActive = 0;
+};
+
+struct SensorManagerTestConfig {
+    uint32_t pid = 0;
+    uint32_t tokenIdVal = 0;
+    int64_t samplingPeriodNs = 0;
+    int64_t maxReportDelayNs = 0;
+};
+
+struct SensorManagerTestDescriptors {
+    SensorDescription sensorDesc1 {};
+    SensorDescription sensorDescFuzz {};
+    SensorDescription sensorDescProximity {};
+};
+
+struct SensorManagerTestContext {
+    SensorManagerTestConfig config;
+    SensorManagerTestDescriptors descriptors;
 };
 
 template<class T>
@@ -144,32 +163,33 @@ void PrepareClientInfoState(ClientInfo &clientInfo, uint32_t pid)
     }
 }
 
-void RunGetSensorInfoTests(SensorManager &sensorMgr, const SensorDescription &sensorDesc1,
-    const SensorDescription &sensorDescFuzz, int64_t samplingPeriodNs, int64_t maxReportDelayNs)
+void RunGetSensorInfoTests(SensorManager &sensorMgr, const SensorManagerTestContext &context)
 {
-    (void)sensorMgr.GetSensorInfo(sensorDesc1, samplingPeriodNs, maxReportDelayNs);
-    (void)sensorMgr.GetSensorInfo(sensorDescFuzz, samplingPeriodNs, maxReportDelayNs);
-    (void)sensorMgr.GetSensorInfo(sensorDesc1, 0, maxReportDelayNs);
-    (void)sensorMgr.GetSensorInfo(sensorDesc1, INT64_MAX, maxReportDelayNs);
-    (void)sensorMgr.GetSensorInfo(sensorDesc1, 1000, maxReportDelayNs);
-    (void)sensorMgr.GetSensorInfo(sensorDesc1, samplingPeriodNs, INT64_MAX);
+    (void)sensorMgr.GetSensorInfo(context.descriptors.sensorDesc1,
+        context.config.samplingPeriodNs, context.config.maxReportDelayNs);
+    (void)sensorMgr.GetSensorInfo(context.descriptors.sensorDescFuzz,
+        context.config.samplingPeriodNs, context.config.maxReportDelayNs);
+    (void)sensorMgr.GetSensorInfo(context.descriptors.sensorDesc1, 0, context.config.maxReportDelayNs);
+    (void)sensorMgr.GetSensorInfo(context.descriptors.sensorDesc1, INT64_MAX, context.config.maxReportDelayNs);
+    (void)sensorMgr.GetSensorInfo(context.descriptors.sensorDesc1,
+        SHORT_SAMPLING_PERIOD_NS, context.config.maxReportDelayNs);
+    (void)sensorMgr.GetSensorInfo(context.descriptors.sensorDesc1, context.config.samplingPeriodNs, INT64_MAX);
 }
 
-void RunSaveSubscriberTests(SensorManager &sensorMgr, const SensorDescription &sensorDesc1,
-    const SensorDescription &sensorDescFuzz, uint32_t pid, int64_t samplingPeriodNs, int64_t maxReportDelayNs)
+void RunSaveSubscriberTests(SensorManager &sensorMgr, const SensorManagerTestContext &context)
 {
-    (void)sensorMgr.SaveSubscriber(sensorDesc1, pid, samplingPeriodNs, maxReportDelayNs);
-    (void)sensorMgr.SaveSubscriber(sensorDescFuzz, pid, samplingPeriodNs, maxReportDelayNs);
-    (void)sensorMgr.SaveSubscriber(sensorDesc1, pid, 0, 0);
-    (void)sensorMgr.SaveSubscriber(sensorDesc1, 0, samplingPeriodNs, maxReportDelayNs);
+    (void)sensorMgr.SaveSubscriber(context.descriptors.sensorDesc1, context.config.pid,
+        context.config.samplingPeriodNs, context.config.maxReportDelayNs);
+    (void)sensorMgr.SaveSubscriber(context.descriptors.sensorDescFuzz, context.config.pid,
+        context.config.samplingPeriodNs, context.config.maxReportDelayNs);
+    (void)sensorMgr.SaveSubscriber(context.descriptors.sensorDesc1, context.config.pid, 0, 0);
+    (void)sensorMgr.SaveSubscriber(context.descriptors.sensorDesc1, 0,
+        context.config.samplingPeriodNs, context.config.maxReportDelayNs);
 }
 
-void RunOtherClientUsingSensorTests(SensorManager &sensorMgr, ClientInfo &clientInfo,
-    const SensorDescription &sensorDesc1, uint32_t pid, int64_t samplingPeriodNs, int64_t maxReportDelayNs)
+void AddSecondClientSubscription(ClientInfo &clientInfo, const SensorManagerTestContext &context)
 {
-    (void)sensorMgr.IsOtherClientUsingSensor(sensorDesc1, pid);
-
-    uint32_t pid2 = pid + NEXT_PID_OFFSET;
+    uint32_t pid2 = context.config.pid + NEXT_PID_OFFSET;
     clientInfo.UpdateAppThreadInfo(pid2, NEXT_UID, 0);
     sptr<SensorBasicDataChannel> channel2 = new (std::nothrow) SensorBasicDataChannel();
     if (channel2 != nullptr) {
@@ -179,13 +199,21 @@ void RunOtherClientUsingSensorTests(SensorManager &sensorMgr, ClientInfo &client
     }
 
     SensorBasicInfo sensorInfo;
-    sensorInfo.SetSamplingPeriodNs(samplingPeriodNs);
-    sensorInfo.SetMaxReportDelayNs(maxReportDelayNs);
+    sensorInfo.SetSamplingPeriodNs(context.config.samplingPeriodNs);
+    sensorInfo.SetMaxReportDelayNs(context.config.maxReportDelayNs);
     sensorInfo.SetSensorState(true);
-    clientInfo.UpdateSensorInfo(sensorDesc1, pid2, sensorInfo);
-    (void)sensorMgr.IsOtherClientUsingSensor(sensorDesc1, pid);
+    clientInfo.UpdateSensorInfo(context.descriptors.sensorDesc1, pid2, sensorInfo);
+}
+
+void RunOtherClientUsingSensorTests(SensorManager &sensorMgr, ClientInfo &clientInfo,
+    const SensorManagerTestContext &context)
+{
+    (void)sensorMgr.IsOtherClientUsingSensor(context.descriptors.sensorDesc1, context.config.pid);
+    AddSecondClientSubscription(clientInfo, context);
+    (void)sensorMgr.IsOtherClientUsingSensor(context.descriptors.sensorDesc1, context.config.pid);
+    uint32_t pid2 = context.config.pid + NEXT_PID_OFFSET;
     clientInfo.DestroySensorChannel(pid2);
-    (void)sensorMgr.IsOtherClientUsingSensor(sensorDesc1, UNKNOWN_PID);
+    (void)sensorMgr.IsOtherClientUsingSensor(context.descriptors.sensorDesc1, UNKNOWN_PID);
 }
 
 void RunAfterDisableSensorTests(SensorManager &sensorMgr, ClientInfo &clientInfo,
@@ -214,8 +242,7 @@ void InitSensorMapForTest(SensorManager &sensorMgr, const std::unordered_map<Sen
 #endif // HDF_DRIVERS_INTERFACE_SENSOR
 }
 
-void RunGetPackageNameAndInitMapTests(SensorManager &sensorMgr, const SensorDescription &sensorDesc1,
-    const Sensor &sensor1, uint32_t tokenIdVal, int64_t samplingPeriodNs, int64_t maxReportDelayNs)
+void RunGetPackageNameTests(SensorManager &sensorMgr, uint32_t tokenIdVal)
 {
     std::string packageName;
     sensorMgr.GetPackageName(tokenIdVal, packageName, true);
@@ -223,22 +250,26 @@ void RunGetPackageNameAndInitMapTests(SensorManager &sensorMgr, const SensorDesc
     sensorMgr.GetPackageName(0, packageName, true);
     sensorMgr.GetPackageName(static_cast<AccessTokenID>(GetSelfTokenID()), packageName, true);
     sensorMgr.GetPackageName(static_cast<AccessTokenID>(GetSelfTokenID()), packageName, false);
+}
 
+void RunInitSensorMapTests(SensorManager &sensorMgr, const Sensor &sensor1,
+    const SensorManagerTestContext &context)
+{
     std::unordered_map<SensorDescription, Sensor> testMap;
-    testMap[sensorDesc1] = sensor1;
+    testMap[context.descriptors.sensorDesc1] = sensor1;
     InitSensorMapForTest(sensorMgr, testMap);
     std::unordered_map<SensorDescription, Sensor> emptyMap;
     InitSensorMapForTest(sensorMgr, emptyMap);
     InitSensorMapForTest(sensorMgr, testMap);
-    (void)sensorMgr.GetSensorInfo(sensorDesc1, samplingPeriodNs, maxReportDelayNs);
+    (void)sensorMgr.GetSensorInfo(context.descriptors.sensorDesc1,
+        context.config.samplingPeriodNs, context.config.maxReportDelayNs);
 }
 
-void CleanupClientInfoState(ClientInfo &clientInfo, const SensorDescription &sensorDesc1,
-    const SensorDescription &sensorDescProximity, uint32_t pid)
+void CleanupClientInfoState(ClientInfo &clientInfo, const SensorManagerTestContext &context)
 {
-    clientInfo.ClearSensorInfo(sensorDesc1);
-    clientInfo.ClearSensorInfo(sensorDescProximity);
-    clientInfo.DestroySensorChannel(pid);
+    clientInfo.ClearSensorInfo(context.descriptors.sensorDesc1);
+    clientInfo.ClearSensorInfo(context.descriptors.sensorDescProximity);
+    clientInfo.DestroySensorChannel(context.config.pid);
 }
 } // namespace
 
@@ -252,32 +283,34 @@ bool SensorManagerFuzzTest(const uint8_t *data, size_t size)
 
     SensorManager &sensorMgr = SensorManager::GetInstance();
     ClientInfo &clientInfo = ClientInfo::GetInstance();
-    SensorDescription sensorDesc1 {};
-    sensorDesc1.sensorType = ACCELEROMETER_TYPE;
-    sensorDesc1.sensorId = ACCELEROMETER_SENSOR_ID;
-    sensorDesc1.deviceId = DEFAULT_DEVICE_ID;
-    SensorDescription sensorDescProximity {};
-    sensorDescProximity.sensorType = PROXIMITY_SENSOR_ID;
-    sensorDescProximity.sensorId = PROXIMITY_SENSOR_ID;
-    sensorDescProximity.deviceId = DEFAULT_DEVICE_ID;
-    SensorDescription sensorDescFuzz {};
-    sensorDescFuzz.sensorType = input.sensorType;
-    sensorDescFuzz.sensorId = input.sensorType;
-    sensorDescFuzz.deviceId = DEFAULT_DEVICE_ID;
+    SensorManagerTestContext context;
+    context.config.pid = input.pid;
+    context.config.tokenIdVal = input.tokenIdVal;
+    context.config.samplingPeriodNs = input.samplingPeriodNs;
+    context.config.maxReportDelayNs = input.maxReportDelayNs;
+    context.descriptors.sensorDesc1.sensorType = ACCELEROMETER_TYPE;
+    context.descriptors.sensorDesc1.sensorId = ACCELEROMETER_SENSOR_ID;
+    context.descriptors.sensorDesc1.deviceId = DEFAULT_DEVICE_ID;
+    context.descriptors.sensorDescProximity.sensorType = PROXIMITY_SENSOR_ID;
+    context.descriptors.sensorDescProximity.sensorId = PROXIMITY_SENSOR_ID;
+    context.descriptors.sensorDescProximity.deviceId = DEFAULT_DEVICE_ID;
+    context.descriptors.sensorDescFuzz.sensorType = input.sensorType;
+    context.descriptors.sensorDescFuzz.sensorId = input.sensorType;
+    context.descriptors.sensorDescFuzz.deviceId = DEFAULT_DEVICE_ID;
 
     Sensor sensor1 = CreateBaseSensor();
     Sensor sensorProximity = CreateBaseSensor();
-    PrepareSensorMap(sensorMgr, sensorDesc1, sensorDescProximity, sensor1, sensorProximity);
-    PrepareClientInfoState(clientInfo, input.pid);
-    RunGetSensorInfoTests(sensorMgr, sensorDesc1, sensorDescFuzz, input.samplingPeriodNs, input.maxReportDelayNs);
-    RunSaveSubscriberTests(sensorMgr, sensorDesc1, sensorDescFuzz, input.pid, input.samplingPeriodNs,
-        input.maxReportDelayNs);
-    RunOtherClientUsingSensorTests(sensorMgr, clientInfo, sensorDesc1, input.pid,
-        input.samplingPeriodNs, input.maxReportDelayNs);
-    RunAfterDisableSensorTests(sensorMgr, clientInfo, sensorDesc1, sensorDescProximity);
-    RunGetPackageNameAndInitMapTests(sensorMgr, sensorDesc1, sensor1, input.tokenIdVal,
-        input.samplingPeriodNs, input.maxReportDelayNs);
-    CleanupClientInfoState(clientInfo, sensorDesc1, sensorDescProximity, input.pid);
+    PrepareSensorMap(sensorMgr, context.descriptors.sensorDesc1, context.descriptors.sensorDescProximity,
+        sensor1, sensorProximity);
+    PrepareClientInfoState(clientInfo, context.config.pid);
+    RunGetSensorInfoTests(sensorMgr, context);
+    RunSaveSubscriberTests(sensorMgr, context);
+    RunOtherClientUsingSensorTests(sensorMgr, clientInfo, context);
+    RunAfterDisableSensorTests(sensorMgr, clientInfo,
+        context.descriptors.sensorDesc1, context.descriptors.sensorDescProximity);
+    RunGetPackageNameTests(sensorMgr, context.config.tokenIdVal);
+    RunInitSensorMapTests(sensorMgr, sensor1, context);
+    CleanupClientInfoState(clientInfo, context);
     return true;
 }
 }  // namespace Sensors

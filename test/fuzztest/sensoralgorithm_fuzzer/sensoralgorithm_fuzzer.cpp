@@ -35,6 +35,12 @@ constexpr size_t VECTOR_SIZE_FOUR = 4;
 constexpr size_t MATRIX_SIZE_NINE = 9;
 constexpr size_t MATRIX_SIZE_SIXTEEN = 16;
 constexpr size_t INVALID_MATRIX_SIZE = 5;
+constexpr size_t VALUE_INDEX_ZERO = 0;
+constexpr size_t VALUE_INDEX_ONE = 1;
+constexpr size_t VALUE_INDEX_TWO = 2;
+constexpr size_t VALUE_INDEX_THREE = 3;
+constexpr size_t VALUE_INDEX_FOUR = 4;
+constexpr size_t VALUE_INDEX_FIVE = 5;
 constexpr int32_t AXIS_X = 1;
 constexpr int32_t AXIS_Y = 2;
 constexpr int32_t AXIS_Z = 3;
@@ -129,7 +135,7 @@ void TestTransformCoordinateSystemCommon(SensorAlgorithm &algorithm, const Senso
     algorithm.TransformCoordinateSystem(inMatrix, input.axisX, input.axisY, outMatrix);
 
     inMatrix.assign(MATRIX_SIZE_SIXTEEN, 0.0f);
-    FillSixteenElementMatrix(inMatrix, input.values[0]);
+    FillSixteenElementMatrix(inMatrix, input.values[VALUE_INDEX_ZERO]);
     outMatrix.assign(MATRIX_SIZE_SIXTEEN, 0.0f);
     algorithm.TransformCoordinateSystem(inMatrix, input.axisX, input.axisY, outMatrix);
 
@@ -156,7 +162,7 @@ void TestTransformCoordinateSystemEdge(SensorAlgorithm &algorithm, const SensorA
     outMatrix.assign(VECTOR_SIZE_THREE, 0.0f);
     algorithm.TransformCoordinateSystem(inMatrix, AXIS_X, AXIS_Y, outMatrix);
 
-    inMatrix.assign(MATRIX_SIZE_NINE, input.values[0]);
+    inMatrix.assign(MATRIX_SIZE_NINE, input.values[VALUE_INDEX_ZERO]);
     outMatrix.assign(MATRIX_SIZE_SIXTEEN, 0.0f);
     algorithm.TransformCoordinateSystem(inMatrix, AXIS_X, AXIS_Y, outMatrix);
 }
@@ -164,9 +170,9 @@ void TestTransformCoordinateSystemEdge(SensorAlgorithm &algorithm, const SensorA
 void TestGetAltitude(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
 {
     float altitude = 0.0f;
-    algorithm.GetAltitude(input.values[0], input.values[1], &altitude);
-    algorithm.GetAltitude(0.0f, input.values[1], &altitude);
-    algorithm.GetAltitude(input.values[0], input.values[1], nullptr);
+    algorithm.GetAltitude(input.values[VALUE_INDEX_ZERO], input.values[VALUE_INDEX_ONE], &altitude);
+    algorithm.GetAltitude(0.0f, input.values[VALUE_INDEX_ONE], &altitude);
+    algorithm.GetAltitude(input.values[VALUE_INDEX_ZERO], input.values[VALUE_INDEX_ONE], nullptr);
 }
 
 void TestGetGeomagneticDip(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
@@ -176,7 +182,7 @@ void TestGetGeomagneticDip(SensorAlgorithm &algorithm, const SensorAlgorithmFuzz
     algorithm.GetGeomagneticDip(inclinationMatrix, &geomagneticDip);
 
     inclinationMatrix.assign(MATRIX_SIZE_SIXTEEN, 0.0f);
-    FillSixteenElementMatrix(inclinationMatrix, input.values[0]);
+    FillSixteenElementMatrix(inclinationMatrix, input.values[VALUE_INDEX_ZERO]);
     algorithm.GetGeomagneticDip(inclinationMatrix, &geomagneticDip);
 
     inclinationMatrix = MakeValues(input, VECTOR_SIZE_TWO);
@@ -193,24 +199,24 @@ void TestGetAngleModifyCommon(SensorAlgorithm &algorithm, const SensorAlgorithmF
     std::vector<float> angleChange(VECTOR_SIZE_THREE, 0.0f);
     algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
 
-    curMatrix.assign(MATRIX_SIZE_SIXTEEN, input.values[0]);
-    preMatrix.assign(MATRIX_SIZE_SIXTEEN, input.values[1]);
+    curMatrix.assign(MATRIX_SIZE_SIXTEEN, input.values[VALUE_INDEX_ZERO]);
+    preMatrix.assign(MATRIX_SIZE_SIXTEEN, input.values[VALUE_INDEX_ONE]);
     algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
 
-    curMatrix.assign(MATRIX_SIZE_NINE, input.values[0]);
-    preMatrix.assign(MATRIX_SIZE_SIXTEEN, input.values[1]);
+    curMatrix.assign(MATRIX_SIZE_NINE, input.values[VALUE_INDEX_ZERO]);
+    preMatrix.assign(MATRIX_SIZE_SIXTEEN, input.values[VALUE_INDEX_ONE]);
     algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
 }
 
 void TestGetAngleModifyEdge(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
 {
-    std::vector<float> curMatrix(MATRIX_SIZE_NINE, input.values[0]);
-    std::vector<float> preMatrix(MATRIX_SIZE_NINE, input.values[1]);
+    std::vector<float> curMatrix(MATRIX_SIZE_NINE, input.values[VALUE_INDEX_ZERO]);
+    std::vector<float> preMatrix(MATRIX_SIZE_NINE, input.values[VALUE_INDEX_ONE]);
     std::vector<float> angleChange(VECTOR_SIZE_TWO, 0.0f);
     algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
 
-    curMatrix.assign(INVALID_MATRIX_SIZE, input.values[0]);
-    preMatrix.assign(MATRIX_SIZE_NINE, input.values[1]);
+    curMatrix.assign(INVALID_MATRIX_SIZE, input.values[VALUE_INDEX_ZERO]);
+    preMatrix.assign(MATRIX_SIZE_NINE, input.values[VALUE_INDEX_ONE]);
     angleChange.assign(VECTOR_SIZE_THREE, 0.0f);
     algorithm.GetAngleModify(curMatrix, preMatrix, angleChange);
 }
@@ -221,13 +227,13 @@ void TestGetDirection(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput
     std::vector<float> rotationAngle(VECTOR_SIZE_THREE, 0.0f);
     algorithm.GetDirection(rotationMatrix, rotationAngle);
 
-    rotationMatrix.assign(MATRIX_SIZE_SIXTEEN, input.values[0]);
+    rotationMatrix.assign(MATRIX_SIZE_SIXTEEN, input.values[VALUE_INDEX_ZERO]);
     algorithm.GetDirection(rotationMatrix, rotationAngle);
 
-    rotationMatrix.assign(INVALID_MATRIX_SIZE, input.values[0]);
+    rotationMatrix.assign(INVALID_MATRIX_SIZE, input.values[VALUE_INDEX_ZERO]);
     algorithm.GetDirection(rotationMatrix, rotationAngle);
 
-    rotationMatrix.assign(MATRIX_SIZE_NINE, input.values[0]);
+    rotationMatrix.assign(MATRIX_SIZE_NINE, input.values[VALUE_INDEX_ZERO]);
     rotationAngle.assign(VECTOR_SIZE_TWO, 0.0f);
     algorithm.GetDirection(rotationMatrix, rotationAngle);
 }
@@ -240,7 +246,7 @@ void TestCreateRotationAndInclinationCommon(SensorAlgorithm &algorithm, const Se
     std::vector<float> inclinationMatrix(MATRIX_SIZE_NINE, 0.0f);
     algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
 
-    geomagnetic = { input.values[3], input.values[4], input.values[5] };
+    geomagnetic = { input.values[VALUE_INDEX_THREE], input.values[VALUE_INDEX_FOUR], input.values[VALUE_INDEX_FIVE] };
     rotationMatrix.assign(MATRIX_SIZE_SIXTEEN, 0.0f);
     inclinationMatrix.assign(MATRIX_SIZE_SIXTEEN, 0.0f);
     algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
@@ -254,13 +260,13 @@ void TestCreateRotationAndInclinationCommon(SensorAlgorithm &algorithm, const Se
 void TestCreateRotationAndInclinationEdge(SensorAlgorithm &algorithm, const SensorAlgorithmFuzzInput &input)
 {
     std::vector<float> gravity = MakeValues(input, VECTOR_SIZE_TWO);
-    std::vector<float> geomagnetic = { input.values[VECTOR_SIZE_TWO] };
+    std::vector<float> geomagnetic = { input.values[VALUE_INDEX_TWO] };
     std::vector<float> rotationMatrix(MATRIX_SIZE_NINE, 0.0f);
     std::vector<float> inclinationMatrix(MATRIX_SIZE_NINE, 0.0f);
     algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
 
     gravity = MakeValues(input, VECTOR_SIZE_THREE);
-    geomagnetic = { input.values[3], input.values[4], input.values[5] };
+    geomagnetic = { input.values[VALUE_INDEX_THREE], input.values[VALUE_INDEX_FOUR], input.values[VALUE_INDEX_FIVE] };
     rotationMatrix.assign(INVALID_MATRIX_SIZE, 0.0f);
     algorithm.CreateRotationAndInclination(gravity, geomagnetic, rotationMatrix, inclinationMatrix);
 
@@ -272,7 +278,8 @@ void TestCreateRotationAndInclinationEdge(SensorAlgorithm &algorithm, const Sens
 
 void TestGeomagneticFieldCommon(const SensorAlgorithmFuzzInput &input)
 {
-    GeomagneticField geoField(input.values[0], input.values[1], input.values[2], input.timeMillis);
+    GeomagneticField geoField(input.values[VALUE_INDEX_ZERO], input.values[VALUE_INDEX_ONE],
+        input.values[VALUE_INDEX_TWO], input.timeMillis);
     geoField.ObtainX();
     geoField.ObtainY();
     geoField.ObtainZ();

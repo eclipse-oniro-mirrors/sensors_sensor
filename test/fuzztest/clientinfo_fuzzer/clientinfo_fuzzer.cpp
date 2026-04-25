@@ -221,6 +221,9 @@ SensorData MakeSensorData(const ClientInfoFuzzInput &input, errno_t &copyResult)
     sensorData.location = input.location;
     sensorData.dataLen = sizeof(float);
     copyResult = memcpy_s(sensorData.data, sizeof(sensorData.data), &TEST_DATA_VALUE, sizeof(float));
+    if (copyResult != EOK) {
+        sensorData.dataLen = 0;
+    }
     return sensorData;
 }
 
@@ -257,7 +260,6 @@ void RunStateAndPermissionTests(ClientInfo &clientInfo, const ClientInfoFuzzInpu
     clientInfo.GetDeviceType();
     clientInfo.IsSubscribe();
     clientInfo.UpdatePermState(input.pid, input.sensorType, input.permState);
-    clientInfo.ChangeSensorPerm(input.callerToken, ACTIVITY_MOTION_PERMISSION, input.permState);
     clientInfo.ChangeSensorPerm(input.callerToken, READ_HEALTH_DATA_PERMISSION, input.permState);
     clientInfo.ChangeSensorPerm(input.callerToken, "invalid.permission", input.permState);
 }

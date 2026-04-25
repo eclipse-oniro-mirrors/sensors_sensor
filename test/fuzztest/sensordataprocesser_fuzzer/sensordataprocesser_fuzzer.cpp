@@ -73,6 +73,19 @@ struct SensorDataSpec {
     int64_t timestamp = 0;
 };
 
+struct FifoCacheTestConfig {
+    uint64_t periodCount = 0;
+    uint64_t fifoCount = 0;
+    int64_t timestamp = 0;
+};
+
+struct FifoCacheTestContext {
+    const std::unordered_map<SensorDescription, Sensor> &sensorMap;
+    sptr<SensorBasicDataChannel> &channel;
+    SensorData &sensorData;
+    FifoCacheTestConfig config;
+};
+
 template<class T>
 size_t GetObject(T &object, const uint8_t *data, size_t size)
 {
@@ -135,7 +148,10 @@ SensorData MakeSensorData(const SensorDataSpec &spec)
     data.mode = spec.mode;
     data.timestamp = spec.timestamp;
     data.dataLen = sizeof(float);
-    (void)memcpy_s(data.data, sizeof(data.data), &spec.value, sizeof(float));
+    errno_t ret = memcpy_s(data.data, sizeof(data.data), &spec.value, sizeof(float));
+    if (ret != EOK) {
+        data.dataLen = 0;
+    }
     return data;
 }
 
@@ -243,23 +259,23 @@ void RunNoneFifoCacheDataTests(const sptr<SensorDataProcesser> &processer,
     }
 }
 
-void RunFifoCacheDataTests(const std::unordered_map<SensorDescription, Sensor> &sensorMap,
-    sptr<SensorBasicDataChannel> &channel, SensorData &sensorData,
-    uint64_t periodCount, uint64_t fifoCount, int64_t timestamp)
+void RunFifoCacheDataTests(const FifoCacheTestContext &context)
 {
-    sptr<SensorDataProcesser> processer = new (std::nothrow) SensorDataProcesser(sensorMap);
+    sptr<SensorDataProcesser> processer = new (std::nothrow) SensorDataProcesser(context.sensorMap);
     if (processer == nullptr) {
         return;
     }
 
     std::unordered_map<SensorDescription, SensorData> cacheBuf;
-    uint64_t currentPeriodCount = (periodCount == 0) ? DEFAULT_PERIOD_COUNT : periodCount;
-    uint64_t currentFifoCount = (fifoCount <= DEFAULT_PERIOD_COUNT) ? DEFAULT_FIFO_COUNT : fifoCount;
-    processer->SendFifoCacheData(cacheBuf, channel, sensorData, currentPeriodCount, currentFifoCount);
+    uint64_t currentPeriodCount = (context.config.periodCount == 0) ? DEFAULT_PERIOD_COUNT : context.config.periodCount;
+    uint64_t currentFifoCount =
+        (context.config.fifoCount <= DEFAULT_PERIOD_COUNT) ? DEFAULT_FIFO_COUNT : context.config.fifoCount;
+    processer->SendFifoCacheData(cacheBuf, context.channel,
+        context.sensorData, currentPeriodCount, currentFifoCount);
     for (uint64_t index = 0; index < currentFifoCount + FIFO_EXTRA_EVENTS; ++index) {
-        SensorData currentData = sensorData;
-        currentData.timestamp = timestamp + static_cast<int64_t>(index);
-        processer->SendFifoCacheData(cacheBuf, channel, currentData, currentPeriodCount, currentFifoCount);
+        SensorData currentData = context.sensorData;
+        currentData.timestamp = context.config.timestamp + static_cast<int64_t>(index);
+        processer->SendFifoCacheData(cacheBuf, context.channel, currentData, currentPeriodCount, currentFifoCount);
     }
 }
 
@@ -333,11 +349,13 @@ bool SensorDataProcesserFuzzTest(const uint8_t *data, size_t size)
 
     SensorDataSpec dataSpec { input.sensorType, TEST_DEVICE_ID, TEST_SENSOR_ID, TEST_LOCATION,
         input.mode, input.sensorValue, input.timestamp };
+    FifoCacheTestConfig fifoConfig { input.periodCount, input.fifoCount, input.timestamp };
     SensorData sensorData = MakeSensorData(dataSpec);
+    FifoCacheTestContext fifoContext { sensorMap, channel, sensorData, fifoConfig };
     RunSendRawDataTests(processer, channel, sensorData);
     RunReportNotContinuousDataTests(processer, channel, sensorData, input.sensorType);
     RunNoneFifoCacheDataTests(processer, channel, sensorData, input.periodCount);
-    RunFifoCacheDataTests(sensorMap, channel, sensorData, input.periodCount, input.fifoCount, input.timestamp);
+    RunFifoCacheDataTests(fifoContext);
     RunCacheAndSendEventTests(processer, channel, sensorData, sensorDesc);
     RunUpdateSensorMapAndFilterTests(processer, input.sensorType, sensorData);
     clientInfo.DestroySensorChannel(TEST_PID);

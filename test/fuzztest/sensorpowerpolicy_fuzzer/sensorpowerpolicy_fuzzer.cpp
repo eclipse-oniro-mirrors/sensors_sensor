@@ -58,6 +58,18 @@ struct SensorPowerPolicyFuzzInput {
     int32_t sensorId2 = 0;
 };
 
+struct SensorPowerPolicyTestConfig {
+    int32_t pid1 = 0;
+    int32_t pid2 = 0;
+    int32_t sensorType = 0;
+    int64_t samplingPeriodNs = 0;
+    int64_t maxReportDelayNs = 0;
+    SensorDescription sensorDesc1 {};
+    SensorDescription sensorDescPedometer {};
+    SensorDescription sensorDesc2 {};
+    SensorBasicInfo sensorInfo;
+};
+
 template<class T>
 size_t GetObject(T &object, const uint8_t *data, size_t size)
 {
@@ -131,19 +143,17 @@ sptr<SensorBasicDataChannel> CreateChannel(ClientInfo &clientInfo, int32_t pid)
     return channel;
 }
 
-void PrepareClientInfoState(ClientInfo &clientInfo, const SensorPowerPolicyFuzzInput &input,
-    const SensorDescription &sensorDesc1, const SensorDescription &sensorDescPedometer,
-    const SensorDescription &sensorDesc2, const SensorBasicInfo &sensorInfo)
+void PrepareClientInfoState(ClientInfo &clientInfo, const SensorPowerPolicyTestConfig &config)
 {
-    clientInfo.UpdateAppThreadInfo(input.pid1, DEFAULT_UID1, 0);
-    (void)CreateChannel(clientInfo, input.pid1);
-    clientInfo.UpdateSensorInfo(sensorDesc1, input.pid1, sensorInfo);
-    clientInfo.UpdateSensorInfo(sensorDescPedometer, input.pid1, sensorInfo);
+    clientInfo.UpdateAppThreadInfo(config.pid1, DEFAULT_UID1, 0);
+    (void)CreateChannel(clientInfo, config.pid1);
+    clientInfo.UpdateSensorInfo(config.sensorDesc1, config.pid1, config.sensorInfo);
+    clientInfo.UpdateSensorInfo(config.sensorDescPedometer, config.pid1, config.sensorInfo);
 
-    clientInfo.UpdateAppThreadInfo(input.pid2, DEFAULT_UID2, 0);
-    (void)CreateChannel(clientInfo, input.pid2);
-    clientInfo.UpdateSensorInfo(sensorDesc1, input.pid2, sensorInfo);
-    clientInfo.UpdateSensorInfo(sensorDesc2, input.pid2, sensorInfo);
+    clientInfo.UpdateAppThreadInfo(config.pid2, DEFAULT_UID2, 0);
+    (void)CreateChannel(clientInfo, config.pid2);
+    clientInfo.UpdateSensorInfo(config.sensorDesc1, config.pid2, config.sensorInfo);
+    clientInfo.UpdateSensorInfo(config.sensorDesc2, config.pid2, config.sensorInfo);
 }
 
 void RunActiveInfoTests(SensorPowerPolicy &powerPolicy, int32_t pid1, int32_t pid2)
@@ -165,16 +175,16 @@ void RunSuspendResumeTests(SensorPowerPolicy &powerPolicy, int32_t pid1, int32_t
 }
 
 void RunResetAndReportTests(SensorPowerPolicy &powerPolicy, ClientInfo &clientInfo,
-    const SensorDescription &sensorDesc1, const SensorBasicInfo &sensorInfo,
-    int32_t pid1, int32_t pid2, int32_t sensorType, int64_t samplingPeriodNs, int64_t maxReportDelayNs)
+    const SensorPowerPolicyTestConfig &config)
 {
-    clientInfo.UpdateSensorInfo(sensorDesc1, pid1, sensorInfo);
-    clientInfo.UpdateSensorInfo(sensorDesc1, pid2, sensorInfo);
-    powerPolicy.SuspendSensors(pid1);
-    powerPolicy.SuspendSensors(pid2);
+    clientInfo.UpdateSensorInfo(config.sensorDesc1, config.pid1, config.sensorInfo);
+    clientInfo.UpdateSensorInfo(config.sensorDesc1, config.pid2, config.sensorInfo);
+    powerPolicy.SuspendSensors(config.pid1);
+    powerPolicy.SuspendSensors(config.pid2);
     powerPolicy.ResetSensors();
 
-    ActiveInfo activeInfo(pid1, DEFAULT_DEVICE_ID, sensorType, DEFAULT_SENSOR_ID, samplingPeriodNs, maxReportDelayNs);
+    ActiveInfo activeInfo(config.pid1, DEFAULT_DEVICE_ID, config.sensorType, DEFAULT_SENSOR_ID,
+        config.samplingPeriodNs, config.maxReportDelayNs);
     std::vector<SessionPtr> emptySessionList;
     powerPolicy.ReportActiveInfo(activeInfo, emptySessionList);
 
@@ -183,17 +193,17 @@ void RunResetAndReportTests(SensorPowerPolicy &powerPolicy, ClientInfo &clientIn
 }
 
 void RunDeleteAndSuspendListTests(SensorPowerPolicy &powerPolicy, ClientInfo &clientInfo,
-    const SensorDescription &sensorDesc1, const SensorBasicInfo &sensorInfo, int32_t pid1, int32_t pid2)
+    const SensorPowerPolicyTestConfig &config)
 {
-    clientInfo.UpdateSensorInfo(sensorDesc1, pid1, sensorInfo);
-    powerPolicy.SuspendSensors(pid1);
-    powerPolicy.DeleteDeathPidSensorInfo(pid1);
+    clientInfo.UpdateSensorInfo(config.sensorDesc1, config.pid1, config.sensorInfo);
+    powerPolicy.SuspendSensors(config.pid1);
+    powerPolicy.DeleteDeathPidSensorInfo(config.pid1);
     powerPolicy.DeleteDeathPidSensorInfo(UNKNOWN_PID3);
 
-    clientInfo.UpdateSensorInfo(sensorDesc1, pid1, sensorInfo);
-    clientInfo.UpdateSensorInfo(sensorDesc1, pid2, sensorInfo);
-    powerPolicy.SuspendSensors(pid1);
-    powerPolicy.SuspendSensors(pid2);
+    clientInfo.UpdateSensorInfo(config.sensorDesc1, config.pid1, config.sensorInfo);
+    clientInfo.UpdateSensorInfo(config.sensorDesc1, config.pid2, config.sensorInfo);
+    powerPolicy.SuspendSensors(config.pid1);
+    powerPolicy.SuspendSensors(config.pid2);
     (void)powerPolicy.GetSuspendPidList();
     powerPolicy.ResetSensors();
 }
@@ -206,14 +216,13 @@ void RunFreezingSensorTest(SensorPowerPolicy &powerPolicy, ClientInfo &clientInf
     powerPolicy.ResumeSensors(pid1);
 }
 
-void CleanupClientInfoState(ClientInfo &clientInfo, const SensorDescription &sensorDesc1,
-    const SensorDescription &sensorDesc2, const SensorDescription &sensorDescPedometer, int32_t pid1, int32_t pid2)
+void CleanupClientInfoState(ClientInfo &clientInfo, const SensorPowerPolicyTestConfig &config)
 {
-    clientInfo.ClearSensorInfo(sensorDesc1);
-    clientInfo.ClearSensorInfo(sensorDesc2);
-    clientInfo.ClearSensorInfo(sensorDescPedometer);
-    clientInfo.DestroySensorChannel(pid1);
-    clientInfo.DestroySensorChannel(pid2);
+    clientInfo.ClearSensorInfo(config.sensorDesc1);
+    clientInfo.ClearSensorInfo(config.sensorDesc2);
+    clientInfo.ClearSensorInfo(config.sensorDescPedometer);
+    clientInfo.DestroySensorChannel(config.pid1);
+    clientInfo.DestroySensorChannel(config.pid2);
 }
 } // namespace
 
@@ -227,23 +236,26 @@ bool SensorPowerPolicyFuzzTest(const uint8_t *data, size_t size)
 
     SensorPowerPolicy &powerPolicy = SensorPowerPolicy::GetInstance();
     ClientInfo &clientInfo = ClientInfo::GetInstance();
-    SensorDescription sensorDesc1 { DEFAULT_DEVICE_ID, input.sensorType, DEFAULT_SENSOR_ID, DEFAULT_LOCATION };
-    SensorDescription sensorDescPedometer { DEFAULT_DEVICE_ID, PEDOMETER_DETECTION_TYPE, DEFAULT_SENSOR_ID,
+    SensorPowerPolicyTestConfig config;
+    config.pid1 = input.pid1;
+    config.pid2 = input.pid2;
+    config.sensorType = input.sensorType;
+    config.samplingPeriodNs = input.samplingPeriodNs;
+    config.maxReportDelayNs = input.maxReportDelayNs;
+    config.sensorDesc1 = { DEFAULT_DEVICE_ID, input.sensorType, DEFAULT_SENSOR_ID, DEFAULT_LOCATION };
+    config.sensorDescPedometer = { DEFAULT_DEVICE_ID, PEDOMETER_DETECTION_TYPE, DEFAULT_SENSOR_ID,
         DEFAULT_LOCATION };
-    SensorDescription sensorDesc2 { DEFAULT_DEVICE_ID, input.sensorType + 1, input.sensorId2, DEFAULT_LOCATION };
-
-    SensorBasicInfo sensorInfo;
-    sensorInfo.SetSamplingPeriodNs(input.samplingPeriodNs);
-    sensorInfo.SetMaxReportDelayNs(input.maxReportDelayNs);
-    sensorInfo.SetSensorState(true);
-    PrepareClientInfoState(clientInfo, input, sensorDesc1, sensorDescPedometer, sensorDesc2, sensorInfo);
+    config.sensorDesc2 = { DEFAULT_DEVICE_ID, input.sensorType + 1, input.sensorId2, DEFAULT_LOCATION };
+    config.sensorInfo.SetSamplingPeriodNs(input.samplingPeriodNs);
+    config.sensorInfo.SetMaxReportDelayNs(input.maxReportDelayNs);
+    config.sensorInfo.SetSensorState(true);
+    PrepareClientInfoState(clientInfo, config);
     RunActiveInfoTests(powerPolicy, input.pid1, input.pid2);
     RunSuspendResumeTests(powerPolicy, input.pid1, input.pid2);
-    RunResetAndReportTests(powerPolicy, clientInfo, sensorDesc1, sensorInfo,
-        input.pid1, input.pid2, input.sensorType, input.samplingPeriodNs, input.maxReportDelayNs);
-    RunDeleteAndSuspendListTests(powerPolicy, clientInfo, sensorDesc1, sensorInfo, input.pid1, input.pid2);
-    RunFreezingSensorTest(powerPolicy, clientInfo, sensorDescPedometer, sensorInfo, input.pid1);
-    CleanupClientInfoState(clientInfo, sensorDesc1, sensorDesc2, sensorDescPedometer, input.pid1, input.pid2);
+    RunResetAndReportTests(powerPolicy, clientInfo, config);
+    RunDeleteAndSuspendListTests(powerPolicy, clientInfo, config);
+    RunFreezingSensorTest(powerPolicy, clientInfo, config.sensorDescPedometer, config.sensorInfo, input.pid1);
+    CleanupClientInfoState(clientInfo, config);
     return true;
 }
 }  // namespace Sensors

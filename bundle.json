@@ -100,7 +100,12 @@
         "//base/sensors/sensor/test/fuzztest/clientinfo_fuzzer:fuzztest",
         "//base/sensors/sensor/test/fuzztest/sensoralgorithm_fuzzer:fuzztest",
         "//base/sensors/sensor/test/fuzztest/sensordataprocesser_fuzzer:fuzztest",
-        "//base/sensors/sensor/test/fuzztest/sensordump_fuzzer:fuzztest"
+        "//base/sensors/sensor/test/fuzztest/sensordump_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/geomagneticfield_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/sensorpowerpolicy_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/sensorbasicdatachannel_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/sensorshakecontrol_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/sensormanager_fuzzer:fuzztest"
       ]
     }
   }

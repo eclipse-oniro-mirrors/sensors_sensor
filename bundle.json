@@ -98,7 +98,9 @@
         "//base/sensors/sensor/test/unittest/coverage:unittest",
         "//base/sensors/sensor/test/fuzztest/sensor_fuzzer:fuzztest",
         "//base/sensors/sensor/test/fuzztest/clientinfo_fuzzer:fuzztest",
-        "//base/sensors/sensor/test/fuzztest/sensoralgorithm_fuzzer:fuzztest"
+        "//base/sensors/sensor/test/fuzztest/sensoralgorithm_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/sensordataprocesser_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/sensordump_fuzzer:fuzztest"
       ]
     }
   }

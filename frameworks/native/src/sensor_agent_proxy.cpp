@@ -16,6 +16,7 @@
 #include "sensor_agent_proxy.h"
 
 #include "print_sensor_data.h"
+#include "securec.h"
 #include "sensor_service_client.h"
 #include "sensor_xcollie.h"
 #undef LOG_TAG
@@ -678,7 +679,16 @@ int32_t SensorAgentProxy::GetSensorActiveInfos(int32_t pid,
         curActiveInfo->samplingPeriodNs = activeInfoList[i].GetSamplingPeriodNs();
         curActiveInfo->maxReportDelayNs = activeInfoList[i].GetMaxReportDelayNs();
     }
-    *sensorActiveInfos = sensorActiveInfos_;
+    SensorActiveInfo *infos = (SensorActiveInfo *)malloc(sizeof(SensorActiveInfo) * activeInfoCount);
+    CHKPR(infos, ERROR);
+    errno_t copyRet = memcpy_s(infos, sizeof(SensorActiveInfo) * activeInfoCount, sensorActiveInfos_,
+        sizeof(SensorActiveInfo) * activeInfoCount);
+    if (copyRet != EOK) {
+        SEN_HILOGE("Copy active infos failed");
+        free(infos);
+        return ERROR;
+    }
+    *sensorActiveInfos = infos;
     *count = static_cast<int32_t>(activeInfoCount);
     return ERR_OK;
 }

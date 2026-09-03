@@ -1616,6 +1616,8 @@ static napi_value GetSensorListByDeviceSync(napi_env env, napi_callback_info inf
     }
     vector<SensorInfo> sensorInfoVec;
     FilteringSensorList(sensorInfos, sensorInfoVec, count);
+    free(sensorInfos);
+    sensorInfos = nullptr;
     for (uint32_t i = 0; i < sensorInfoVec.size(); ++i) {
         napi_value value = nullptr;
         if (!ConvertToSensorInfo(env, sensorInfoVec[i], value)) {
@@ -1684,6 +1686,8 @@ static napi_value GetSingleSensorByDeviceSync(napi_env env, napi_callback_info i
     }
     vector<SensorInfo> sensorInfoVec;
     FilteringSingleSensorList(sensorInfos, sensorInfoVec, count, sensorTypeId);
+    free(sensorInfos);
+    sensorInfos = nullptr;
     for (uint32_t i = 0; i < sensorInfoVec.size(); ++i) {
         napi_value value = nullptr;
         if (!ConvertToSensorInfo(env, sensorInfoVec[i], value)) {

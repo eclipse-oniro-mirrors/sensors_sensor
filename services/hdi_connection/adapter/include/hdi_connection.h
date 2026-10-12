@@ -25,7 +25,7 @@ namespace Sensors {
 class HdiConnection : public ISensorHdiConnection {
 public:
     HdiConnection() = default;
-    virtual ~HdiConnection() {}
+    virtual ~HdiConnection();
     int32_t ConnectHdi() override;
     int32_t GetSensorList(std::vector<Sensor> &sensorList) override;
     int32_t GetSensorListByDevice(int32_t deviceId, std::vector<Sensor> &singleDevSensors) override;

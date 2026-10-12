@@ -20,9 +20,13 @@
             OHOS::Sensors::SensorServiceProxy*;
             OHOS::Sensors::SensorServiceClient*;
             "OHOS::DelayedSingleton<OHOS::Sensors::SensorAgentProxy>::mutex_";
+            "guard variable for OHOS::DelayedSingleton<OHOS::Sensors::SensorAgentProxy>::mutex_";
             "OHOS::DelayedSingleton<OHOS::Sensors::SensorAgentProxy>::instance_";
+            "guard variable for OHOS::DelayedSingleton<OHOS::Sensors::SensorAgentProxy>::instance_";
             "OHOS::Singleton<OHOS::Sensors::PrintSensorData>::instance_";
+            "guard variable for OHOS::Singleton<OHOS::Sensors::PrintSensorData>::instance_";
             "OHOS::Singleton<OHOS::Sensors::SensorServiceClient>::instance_";
+            "guard variable for OHOS::Singleton<OHOS::Sensors::SensorServiceClient>::instance_";
             "OHOS::Sensors::FdListener::OnReadable(int)";
             "OHOS::Sensors::FdListener::OnShutdown(int)";
             "OHOS::Sensors::FdListener::SetChannel(OHOS::Sensors::SensorDataChannel*)";

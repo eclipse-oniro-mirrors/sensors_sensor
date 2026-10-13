@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -258,6 +259,7 @@ static void HandleGetActiveSensorInfos(FuzzSession& session, FuzzedDataProvider&
     SensorActiveInfo* activeInfos = nullptr;
     int32_t count = 0;
     (void)GetActiveSensorInfos(session.pid, &activeInfos, &count);
+    free(activeInfos);
 }
 
 // 重置休眠态传感器，用于异常恢复

@@ -641,6 +641,10 @@ namespace {
 int32_t ConvertActiveInfos(const std::vector<ActiveInfo> &activeInfoList)
 {
     size_t activeInfoCount = activeInfoList.size();
+    if (activeInfoCount == 0 || activeInfoCount > MAX_SENSOR_LIST_SIZE) {
+        SEN_HILOGE("Active info count is invalid, count:%{public}zu", activeInfoCount);
+        return ERROR;
+    }
     sensorActiveInfos_ = (SensorActiveInfo *)malloc(sizeof(SensorActiveInfo) * activeInfoCount);
     CHKPR(sensorActiveInfos_, ERROR);
     for (size_t i = 0; i < activeInfoCount; ++i) {
@@ -655,6 +659,10 @@ int32_t ConvertActiveInfos(const std::vector<ActiveInfo> &activeInfoList)
 
 SensorActiveInfo *CopyActiveInfos(size_t activeInfoCount)
 {
+    if (activeInfoCount == 0 || activeInfoCount > MAX_SENSOR_LIST_SIZE) {
+        SEN_HILOGE("Active info count is invalid, count:%{public}zu", activeInfoCount);
+        return nullptr;
+    }
     SensorActiveInfo *infos = (SensorActiveInfo *)malloc(sizeof(SensorActiveInfo) * activeInfoCount);
     if (infos == nullptr) {
         return nullptr;

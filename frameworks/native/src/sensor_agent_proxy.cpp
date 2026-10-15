@@ -476,8 +476,8 @@ int32_t SensorAgentProxy::GetDeviceSensors(int32_t deviceId, SensorInfo **single
         }
     }
     int32_t filteredCount = static_cast<int32_t>(filteredSensorInfos.size());
-    auto newSensorInfo = std::make_unique<SensorInfo[]>(filteredCount);
-    if (!newSensorInfo) {
+    SensorInfo *newSensorInfo = static_cast<SensorInfo *>(malloc(sizeof(SensorInfo) * filteredCount));
+    if (newSensorInfo == nullptr && filteredCount != 0) {
         SEN_HILOGE("Failed to allocate memory for filtered sensorInfos");
         return ERROR;
     }
@@ -485,7 +485,7 @@ int32_t SensorAgentProxy::GetDeviceSensors(int32_t deviceId, SensorInfo **single
         newSensorInfo[i] = filteredSensorInfos[i];
     }
     free(*singleDevSensorInfo);
-    *singleDevSensorInfo = newSensorInfo.release();
+    *singleDevSensorInfo = newSensorInfo;
     *count = filteredCount;
     return SUCCESS;
 }
@@ -559,20 +559,21 @@ int32_t SensorAgentProxy::UpdateSensorInfosCache(const std::vector<Sensor>& sing
         SEN_HILOGE("The number of sensors exceeds the maximum value");
         return ERROR;
     }
-    std::unique_ptr<SensorInfo[]> newSensorInfos = std::make_unique<SensorInfo[]>(newTotalCount);
+    SensorInfo *newSensorInfos = static_cast<SensorInfo *>(malloc(sizeof(SensorInfo) * newTotalCount));
     if (newSensorInfos == nullptr) {
         SEN_HILOGE("Failed to allocate memory for newSensorInfos");
         return ERROR;
     }
-    if (sensorInfoCheck_.sensorInfos) {
-        std::copy(sensorInfoCheck_.sensorInfos, sensorInfoCheck_.sensorInfos + sensorInfoCount_, newSensorInfos.get());
+    if (sensorInfoCheck_.sensorInfos != nullptr) {
+        std::copy(sensorInfoCheck_.sensorInfos, sensorInfoCheck_.sensorInfos + sensorInfoCount_, newSensorInfos);
     }
     for (const auto& sensor : singleDevSensors) {
         if (!FindSensorInfo(sensor.GetDeviceId(), sensor.GetSensorId(), sensor.GetSensorTypeId())) {
             UpdateSensorInfo(&newSensorInfos[currentInfoCount++], sensor);
         }
     }
-    sensorInfoCheck_.sensorInfos = newSensorInfos.release();
+    free(sensorInfoCheck_.sensorInfos);
+    sensorInfoCheck_.sensorInfos = newSensorInfos;
     sensorInfoCount_ = static_cast<int32_t>(newTotalCount);
     return SUCCESS;
 }

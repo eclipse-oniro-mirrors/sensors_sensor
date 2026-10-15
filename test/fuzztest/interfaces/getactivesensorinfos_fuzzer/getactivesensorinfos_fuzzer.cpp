@@ -15,6 +15,8 @@
 
 #include "getactivesensorinfos_fuzzer.h"
 
+#include <cstdlib>
+
 #include "accesstoken_kit.h"
 #include "nativetoken_kit.h"
 #include "securec.h"
@@ -79,6 +81,7 @@ void GetActiveSensorInfosFuzzTest(const uint8_t *data, size_t size)
     SensorActiveInfo *sensorActiveInfos { nullptr };
     int32_t count { 0 };
     GetActiveSensorInfos(pid, &sensorActiveInfos, &count);
+    free(sensorActiveInfos);
 }
 } // namespace Sensors
 } // namespace OHOS

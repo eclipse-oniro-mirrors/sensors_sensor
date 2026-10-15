@@ -2105,6 +2105,10 @@ int32_t GetLocalDeviceIdInner()
         };
         result.push_back(sensorInfo);
     }
+    if (sensorInfos != nullptr) {
+        free(sensorInfos);
+        sensorInfos = nullptr;
+    }
     return taihe::array<::ohos::sensor::Sensor>(result);
 }
 } // namespace

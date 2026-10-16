@@ -16,6 +16,7 @@
 #include "sensor_agent_proxy.h"
 
 #include "print_sensor_data.h"
+#include "securec.h"
 #include "sensor_service_client.h"
 #include "sensor_xcollie.h"
 #undef LOG_TAG
@@ -475,8 +476,8 @@ int32_t SensorAgentProxy::GetDeviceSensors(int32_t deviceId, SensorInfo **single
         }
     }
     int32_t filteredCount = static_cast<int32_t>(filteredSensorInfos.size());
-    auto newSensorInfo = std::make_unique<SensorInfo[]>(filteredCount);
-    if (!newSensorInfo) {
+    SensorInfo *newSensorInfo = static_cast<SensorInfo *>(malloc(sizeof(SensorInfo) * filteredCount));
+    if (newSensorInfo == nullptr && filteredCount != 0) {
         SEN_HILOGE("Failed to allocate memory for filtered sensorInfos");
         return ERROR;
     }
@@ -484,7 +485,7 @@ int32_t SensorAgentProxy::GetDeviceSensors(int32_t deviceId, SensorInfo **single
         newSensorInfo[i] = filteredSensorInfos[i];
     }
     free(*singleDevSensorInfo);
-    *singleDevSensorInfo = newSensorInfo.release();
+    *singleDevSensorInfo = newSensorInfo;
     *count = filteredCount;
     return SUCCESS;
 }
@@ -558,20 +559,21 @@ int32_t SensorAgentProxy::UpdateSensorInfosCache(const std::vector<Sensor>& sing
         SEN_HILOGE("The number of sensors exceeds the maximum value");
         return ERROR;
     }
-    std::unique_ptr<SensorInfo[]> newSensorInfos = std::make_unique<SensorInfo[]>(newTotalCount);
+    SensorInfo *newSensorInfos = static_cast<SensorInfo *>(malloc(sizeof(SensorInfo) * newTotalCount));
     if (newSensorInfos == nullptr) {
         SEN_HILOGE("Failed to allocate memory for newSensorInfos");
         return ERROR;
     }
-    if (sensorInfoCheck_.sensorInfos) {
-        std::copy(sensorInfoCheck_.sensorInfos, sensorInfoCheck_.sensorInfos + sensorInfoCount_, newSensorInfos.get());
+    if (sensorInfoCheck_.sensorInfos != nullptr) {
+        std::copy(sensorInfoCheck_.sensorInfos, sensorInfoCheck_.sensorInfos + sensorInfoCount_, newSensorInfos);
     }
     for (const auto& sensor : singleDevSensors) {
         if (!FindSensorInfo(sensor.GetDeviceId(), sensor.GetSensorId(), sensor.GetSensorTypeId())) {
             UpdateSensorInfo(&newSensorInfos[currentInfoCount++], sensor);
         }
     }
-    sensorInfoCheck_.sensorInfos = newSensorInfos.release();
+    free(sensorInfoCheck_.sensorInfos);
+    sensorInfoCheck_.sensorInfos = newSensorInfos;
     sensorInfoCount_ = static_cast<int32_t>(newTotalCount);
     return SUCCESS;
 }
@@ -636,6 +638,47 @@ int32_t SensorAgentProxy::ResumeSensors(int32_t pid)
     return ret;
 }
 
+namespace {
+int32_t ConvertActiveInfos(const std::vector<ActiveInfo> &activeInfoList)
+{
+    size_t activeInfoCount = activeInfoList.size();
+    if (activeInfoCount == 0 || activeInfoCount > MAX_SENSOR_LIST_SIZE) {
+        SEN_HILOGE("Active info count is invalid, count:%{public}zu", activeInfoCount);
+        return ERROR;
+    }
+    sensorActiveInfos_ = (SensorActiveInfo *)malloc(sizeof(SensorActiveInfo) * activeInfoCount);
+    CHKPR(sensorActiveInfos_, ERROR);
+    for (size_t i = 0; i < activeInfoCount; ++i) {
+        SensorActiveInfo *curActiveInfo = sensorActiveInfos_ + i;
+        curActiveInfo->pid = activeInfoList[i].GetPid();
+        curActiveInfo->sensorId = activeInfoList[i].GetSensorId();
+        curActiveInfo->samplingPeriodNs = activeInfoList[i].GetSamplingPeriodNs();
+        curActiveInfo->maxReportDelayNs = activeInfoList[i].GetMaxReportDelayNs();
+    }
+    return ERR_OK;
+}
+
+SensorActiveInfo *CopyActiveInfos(size_t activeInfoCount)
+{
+    if (activeInfoCount == 0 || activeInfoCount > MAX_SENSOR_LIST_SIZE) {
+        SEN_HILOGE("Active info count is invalid, count:%{public}zu", activeInfoCount);
+        return nullptr;
+    }
+    SensorActiveInfo *infos = (SensorActiveInfo *)malloc(sizeof(SensorActiveInfo) * activeInfoCount);
+    if (infos == nullptr) {
+        return nullptr;
+    }
+    errno_t ret = memcpy_s(infos, sizeof(SensorActiveInfo) * activeInfoCount, sensorActiveInfos_,
+        sizeof(SensorActiveInfo) * activeInfoCount);
+    if (ret != EOK) {
+        SEN_HILOGE("Copy active infos failed");
+        free(infos);
+        return nullptr;
+    }
+    return infos;
+}
+} // namespace
+
 int32_t SensorAgentProxy::GetSensorActiveInfos(int32_t pid,
     SensorActiveInfo **sensorActiveInfos, int32_t *count) const
 {
@@ -669,16 +712,13 @@ int32_t SensorAgentProxy::GetSensorActiveInfos(int32_t pid,
         SEN_HILOGE("The number of active info exceeds the maximum value, count:%{public}zu", activeInfoCount);
         return ERROR;
     }
-    sensorActiveInfos_ = (SensorActiveInfo *)malloc(sizeof(SensorActiveInfo) * activeInfoCount);
-    CHKPR(sensorActiveInfos_, ERROR);
-    for (size_t i = 0; i < activeInfoCount; ++i) {
-        SensorActiveInfo *curActiveInfo = sensorActiveInfos_ + i;
-        curActiveInfo->pid = activeInfoList[i].GetPid();
-        curActiveInfo->sensorId = activeInfoList[i].GetSensorId();
-        curActiveInfo->samplingPeriodNs = activeInfoList[i].GetSamplingPeriodNs();
-        curActiveInfo->maxReportDelayNs = activeInfoList[i].GetMaxReportDelayNs();
+    ret = ConvertActiveInfos(activeInfoList);
+    if (ret != ERR_OK) {
+        return ret;
     }
-    *sensorActiveInfos = sensorActiveInfos_;
+    SensorActiveInfo *infos = CopyActiveInfos(activeInfoCount);
+    CHKPR(infos, ERROR);
+    *sensorActiveInfos = infos;
     *count = static_cast<int32_t>(activeInfoCount);
     return ERR_OK;
 }

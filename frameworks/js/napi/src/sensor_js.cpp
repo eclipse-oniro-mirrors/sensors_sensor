@@ -1590,6 +1590,20 @@ static void FilteringSensorList(SensorInfo *sensorInfos, vector<SensorInfo> &cal
     return;
 }
 
+static void ConvertSensorInfoVecToArray(napi_env env, const vector<SensorInfo> &sensorInfoVec, napi_value result)
+{
+    for (uint32_t i = 0; i < sensorInfoVec.size(); ++i) {
+        napi_value value = nullptr;
+        if (!ConvertToSensorInfo(env, sensorInfoVec[i], value)) {
+            SEN_HILOGE("Convert sensor info fail");
+            return;
+        }
+        if (napi_set_element(env, result, i, value) != napi_ok) {
+            SEN_HILOGE("napi_set_element fail");
+        }
+    }
+}
+
 static napi_value GetSensorListByDeviceSync(napi_env env, napi_callback_info info)
 {
     CALL_LOG_ENTER;
@@ -1623,16 +1637,9 @@ static napi_value GetSensorListByDeviceSync(napi_env env, napi_callback_info inf
     }
     vector<SensorInfo> sensorInfoVec;
     FilteringSensorList(sensorInfos, sensorInfoVec, count);
-    for (uint32_t i = 0; i < sensorInfoVec.size(); ++i) {
-        napi_value value = nullptr;
-        if (!ConvertToSensorInfo(env, sensorInfoVec[i], value)) {
-            SEN_HILOGE("Convert sensor info fail");
-            return result;
-        }
-        if (napi_set_element(env, result, i, value) != napi_ok) {
-            SEN_HILOGE("napi_set_element fail");
-        }
-    }
+    free(sensorInfos);
+    sensorInfos = nullptr;
+    ConvertSensorInfoVecToArray(env, sensorInfoVec, result);
     return result;
 }
 
@@ -1691,16 +1698,9 @@ static napi_value GetSingleSensorByDeviceSync(napi_env env, napi_callback_info i
     }
     vector<SensorInfo> sensorInfoVec;
     FilteringSingleSensorList(sensorInfos, sensorInfoVec, count, sensorTypeId);
-    for (uint32_t i = 0; i < sensorInfoVec.size(); ++i) {
-        napi_value value = nullptr;
-        if (!ConvertToSensorInfo(env, sensorInfoVec[i], value)) {
-            SEN_HILOGE("Convert sensor info fail");
-            return result;
-        }
-        if (napi_set_element(env, result, i, value) != napi_ok) {
-            SEN_HILOGE("napi_set_element fail");
-        }
-    }
+    free(sensorInfos);
+    sensorInfos = nullptr;
+    ConvertSensorInfoVecToArray(env, sensorInfoVec, result);
     return result;
 }
 

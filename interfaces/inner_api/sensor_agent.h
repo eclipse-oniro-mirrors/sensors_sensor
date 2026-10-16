@@ -156,7 +156,9 @@ int32_t ResumeSensors(int32_t pid);
  * @brief Obtains information about all sensors enabled by a process.
  *
  * @param pid Indicates the ID of the process.
- * @param sensorActiveInfos Indicates the double pointer to the information obtained.
+ * @param sensorActiveInfos Indicates the double pointer to the information obtained. The buffer is
+ * newly allocated on each successful call and owned by the caller, who must release it with
+ * <b>free</b> after use. It is <b>nullptr</b> when no sensor is enabled.
  * @param count Indicates the pointer to the number of sensors enabled by the process.
  * @return Returns <b>0</b> if the information is obtained; returns a non-zero value otherwise.
  *

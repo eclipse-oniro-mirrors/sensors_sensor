@@ -115,6 +115,11 @@ bool HdiConnection::GetHdiInterface()
     return false;
 }
 
+HdiConnection::~HdiConnection()
+{
+    UnregisterHdiDeathRecipient();
+}
+
 int32_t HdiConnection::ConnectHdi()
 {
     CALL_LOG_ENTER;

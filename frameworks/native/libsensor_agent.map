@@ -44,7 +44,9 @@
             GeomagneticField*;
             SensorAlgorithm*;
             "OHOS::DelayedSingleton<OHOS::Sensors::SensorAgentProxy>::mutex_";
+            "guard variable for OHOS::DelayedSingleton<OHOS::Sensors::SensorAgentProxy>::mutex_";
             "OHOS::DelayedSingleton<OHOS::Sensors::SensorAgentProxy>::instance_";
+            "guard variable for OHOS::DelayedSingleton<OHOS::Sensors::SensorAgentProxy>::instance_";
         };
     local:
         *;

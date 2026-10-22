@@ -103,6 +103,8 @@ void SensorAgentEnhancedFuzzTest(const uint8_t *data, size_t size)
     SensorInfo *sensorInfo = nullptr;
     int32_t count = 0;
     GetDeviceSensors(deviceId, &sensorInfo, &count);
+    free(sensorInfo);
+    sensorInfo = nullptr;
 
     SubscribeSensorEnhanced(sensorIdentifier, &user);
     SetBatchEnhanced(sensorIdentifier, &user, SAMPLING_INTERVAL, REPORT_INTERVAL);

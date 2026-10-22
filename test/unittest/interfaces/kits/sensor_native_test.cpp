@@ -42,6 +42,7 @@ constexpr int64_t INVALID_VALUE = -1;
 constexpr float INVALID_RESOLUTION = -1.0F;
 Sensor_Subscriber *g_user = nullptr;
 std::atomic_bool g_existAmbientLight = false;
+std::atomic_bool g_existGyroscope = false;
 } // namespace
 
 class SensorAgentTest : public testing::Test {
@@ -69,11 +70,19 @@ void SensorAgentTest::SetUpTestCase()
         if (sensorType == SENSOR_TYPE_AMBIENT_LIGHT) {
             g_existAmbientLight = true;
             SEN_HILOGI("Exist ambient light sensor");
-            break;
+            continue;
+        }
+        if (sensorType == SENSOR_TYPE_GYROSCOPE) {
+            g_existGyroscope = true;
+            SEN_HILOGI("Exist gyroscope sensor");
+            continue;
         }
     }
     if (!g_existAmbientLight) {
         SEN_HILOGI("Not exist ambient light sensor");
+    }
+    if (!g_existGyroscope) {
+        SEN_HILOGI("Not exist gyroscope sensor");
     }
     ret = OH_Sensor_DestroyInfos(sensors, count);
     ASSERT_EQ(ret, SENSOR_SUCCESS);
@@ -454,7 +463,7 @@ HWTEST_F(SensorAgentTest, OH_Sensor_Subscribe_005, TestSize.Level1)
         ret = OH_SensorSubscriptionAttribute_SetSamplingInterval(attr, SENSOR_SAMPLE_PERIOD);
         ASSERT_EQ(ret, SENSOR_SUCCESS);
         ret = OH_Sensor_Subscribe(id, attr, g_user);
-        ASSERT_EQ(ret, SENSOR_SERVICE_EXCEPTION);
+        ASSERT_EQ(ret, SENSOR_PARAMETER_ERROR);
 }
 
 HWTEST_F(SensorAgentTest, OH_Sensor_Subscribe_006, TestSize.Level1)
@@ -481,7 +490,7 @@ HWTEST_F(SensorAgentTest, OH_Sensor_Subscribe_007, TestSize.Level1)
         ASSERT_EQ(ret, SENSOR_SUCCESS);
         Sensor_SubscriptionId *id = OH_Sensor_CreateSubscriptionId();
         ret = OH_Sensor_Unsubscribe(id, g_user);
-        ASSERT_EQ(ret, SENSOR_SERVICE_EXCEPTION);
+        ASSERT_EQ(ret, SENSOR_PARAMETER_ERROR);
 }
 
 HWTEST_F(SensorAgentTest, OH_Sensor_Subscribe_008, TestSize.Level1)
@@ -506,6 +515,41 @@ HWTEST_F(SensorAgentTest, OH_Sensor_Subscribe_008, TestSize.Level1)
         std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_TIME_MS));
         ret = OH_Sensor_Unsubscribe(id, g_user);
         ASSERT_EQ(ret, SENSOR_SUCCESS);
+        if (id != nullptr) {
+            OH_Sensor_DestroySubscriptionId(id);
+        }
+        if (attr != nullptr) {
+            OH_Sensor_DestroySubscriptionAttribute(attr);
+        }
+        if (g_user != nullptr) {
+            OH_Sensor_DestroySubscriber(g_user);
+            g_user = nullptr;
+        }
+    }
+}
+
+HWTEST_F(SensorAgentTest, OH_Sensor_Subscribe_009, TestSize.Level0)
+{
+    SEN_HILOGI("OH_Sensor_Subscribe_009 in");
+    if (g_existGyroscope) {
+        g_user = OH_Sensor_CreateSubscriber();
+        int32_t ret = OH_SensorSubscriber_SetCallback(g_user, SensorDataCallbackImpl);
+        ASSERT_EQ(ret, SENSOR_SUCCESS);
+
+        Sensor_SubscriptionId *id = OH_Sensor_CreateSubscriptionId();
+        ret = OH_SensorSubscriptionId_SetType(id, SENSOR_TYPE_GYROSCOPE);
+        ASSERT_EQ(ret, SENSOR_SUCCESS);
+
+        Sensor_SubscriptionAttribute *attr = OH_Sensor_CreateSubscriptionAttribute();
+        ret = OH_SensorSubscriptionAttribute_SetSamplingInterval(attr, SENSOR_SAMPLE_PERIOD);
+        ASSERT_EQ(ret, SENSOR_SUCCESS);
+
+        ret = OH_Sensor_Subscribe(id, attr, g_user);
+        ASSERT_EQ(ret, SENSOR_PERMISSION_DENIED);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_TIME_MS));
+        ret = OH_Sensor_Unsubscribe(id, g_user);
+        ASSERT_EQ(ret, SENSOR_SERVICE_EXCEPTION);
         if (id != nullptr) {
             OH_Sensor_DestroySubscriptionId(id);
         }
@@ -711,6 +755,14 @@ HWTEST_F(SensorAgentTest, OH_SensorSubscriber_GetCallback_003, TestSize.Level1)
     if (g_user != nullptr) {
         OH_Sensor_DestroySubscriber(g_user);
     }
+}
+
+HWTEST_F(SensorAgentTest, OH_Sensor_DestroyInfos_001, TestSize.Level1)
+{
+    SEN_HILOGI("OH_Sensor_DestroyInfos_001 in");
+    uint32_t count = 0;
+    int32_t ret = OH_Sensor_DestroyInfos(nullptr, count);
+    ASSERT_EQ(ret, SENSOR_SUCCESS);
 }
 } // namespace Sensors
 } // namespace OHOS

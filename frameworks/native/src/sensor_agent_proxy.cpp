@@ -869,10 +869,14 @@ bool SensorAgentProxy::HandlePlugSensorData(const SensorPlugData &info) __attrib
     if (!UpdateSensorInfo(info)) {
         return false;
     }
-    std::lock_guard<std::recursive_mutex> subscribePlugLock(subscribePlugMutex_);
+    std::set<const SensorUser *> copySubscribeSet;
     SensorStatusEvent event;
-    UpdateSensorStatusEvent(event, info);
-    for (const auto &it : subscribeSet_) {
+    {
+        std::lock_guard<std::recursive_mutex> subscribePlugLock(subscribePlugMutex_);
+        UpdateSensorStatusEvent(event, info);
+        copySubscribeSet = subscribeSet_;
+    }
+    for (const auto &it : copySubscribeSet) {
         if (it->plugCallback != nullptr) {
             SEN_HILOGD("plug callback is run");
             it->plugCallback(&event);

@@ -26,6 +26,20 @@
 
 namespace {
 const uint32_t FLOAT_SIZE = 4;
+static Sensor_Result NormalizeNativeErrCode(int32_t code)
+{
+    switch (code) {
+        case OHOS::Sensors::PERMISSION_DENIED: {
+            return SENSOR_PERMISSION_DENIED;
+        }
+        case OHOS::Sensors::PARAMETER_ERROR: {
+            return SENSOR_PARAMETER_ERROR;
+        }
+        default: {
+            return SENSOR_SERVICE_EXCEPTION;
+        }
+    }
+}
 }
 
 Sensor_Result OH_Sensor_GetInfos(Sensor_Info **sensors, uint32_t *count)
@@ -76,22 +90,33 @@ Sensor_Result OH_Sensor_GetInfos(Sensor_Info **sensors, uint32_t *count)
 
 Sensor_Info **OH_Sensor_CreateInfos(uint32_t count)
 {
-    auto sensors = new Sensor_Info *[count];
+    auto sensors = new (std::nothrow) Sensor_Info *[count];
+    if (sensors == nullptr) {
+        SEN_HILOGE("Failed to create Sensor_info");
+        return nullptr;
+    }
     for (uint32_t i = 0; i < count; ++i) {
-        sensors[i] = new Sensor_Info();
+        sensors[i] = new (std::nothrow) Sensor_Info();
+        if (sensors[i] == nullptr) {
+            for (uint32_t j = 0; j < i; ++j) {
+                delete sensors[j];
+            }
+            delete[] sensors;
+            return nullptr;
+        }
     }
     return sensors;
 }
 
 int32_t OH_Sensor_DestroyInfos(Sensor_Info **sensors, uint32_t count)
 {
-    for (uint32_t i = 0; i < count; ++i) {
-        if (sensors[i] != nullptr) {
-            delete sensors[i];
-            sensors[i] = nullptr;
-        }
-    }
     if (sensors != nullptr) {
+        for (uint32_t i = 0; i < count; ++i) {
+            if (sensors[i] != nullptr) {
+                delete sensors[i];
+                sensors[i] = nullptr;
+            }
+        }
         delete[] sensors;
         sensors = nullptr;
     }
@@ -188,15 +213,20 @@ Sensor_Result OH_Sensor_Subscribe(const Sensor_SubscriptionId *id,
     int32_t ret = SubscribeSensor(sensorType, sensorUser);
     if (ret != SENSOR_SUCCESS) {
         SEN_HILOGE("SubscribeSensor failed, %{public}d", ret);
-        return SENSOR_SERVICE_EXCEPTION;
+        return NormalizeNativeErrCode(ret);
     }
     int64_t samplingInterval = attribute->samplingInterval;
     ret = SetBatch(sensorType, sensorUser, samplingInterval, samplingInterval);
     if (ret != SENSOR_SUCCESS) {
         SEN_HILOGE("SetBatch failed, %{public}d", ret);
-        return SENSOR_SERVICE_EXCEPTION;
+        return NormalizeNativeErrCode(ret);
     }
-    return static_cast<Sensor_Result>(ActivateSensor(sensorType, sensorUser));
+    ret = ActivateSensor(sensorType, sensorUser);
+    if (ret != SENSOR_SUCCESS) {
+        SEN_HILOGE("ActivateSensor failed, %{public}d", ret);
+        return NormalizeNativeErrCode(ret);
+    }
+    return SENSOR_SUCCESS;
 }
 
 Sensor_Result OH_Sensor_Unsubscribe(const Sensor_SubscriptionId *id,
@@ -210,10 +240,15 @@ Sensor_Result OH_Sensor_Unsubscribe(const Sensor_SubscriptionId *id,
     int32_t sensorType = id->sensorType;
     int32_t ret = DeactivateSensor(sensorType, sensorUser);
     if (ret != SENSOR_SUCCESS) {
-        SEN_HILOGE("SetBatch failed, %{public}d", ret);
-        return SENSOR_SERVICE_EXCEPTION;
+        SEN_HILOGE("DeactivateSensor failed, %{public}d", ret);
+        return NormalizeNativeErrCode(ret);
     }
-    return static_cast<Sensor_Result>(UnsubscribeSensor(sensorType, sensorUser));
+    ret = UnsubscribeSensor(sensorType, sensorUser);
+    if (ret != SENSOR_SUCCESS) {
+        SEN_HILOGE("UnsubscribeSensor failed, %{public}d", ret);
+        return NormalizeNativeErrCode(ret);
+    }
+    return SENSOR_SUCCESS;
 }
 
 int32_t OH_SensorEvent_GetType(Sensor_Event* sensorEvent, Sensor_Type *sensorType)

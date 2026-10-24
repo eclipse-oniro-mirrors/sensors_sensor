@@ -68,7 +68,6 @@ void PrintSensorData::ControlSensorHdiPrint(const SensorData &sensorData)
     auto triggerIt = std::find(g_triggerSensorType.begin(), g_triggerSensorType.end(), sensorData.sensorTypeId);
     if (triggerIt != g_triggerSensorType.end()) {
         PrintHdiData(sensorData);
-        ProcessHdiDFX(sensorData);
     }
     std::lock_guard<std::mutex> hdiLoginfoLock(hdiLoginfoMutex_);
     auto it = hdiLoginfo_.find(sensorData.sensorTypeId);
@@ -119,26 +118,6 @@ void PrintSensorData::PrintHdiData(const SensorData &sensorData)
     }
     str.append("\n");
     SEN_HILOGI("%{public}s", str.c_str());
-} // LCOV_EXCL_STOP
-
-void PrintSensorData::ProcessHdiDFX(const SensorData &sensorData)
-{ // LCOV_EXCL_START
-    std::string strData;
-    auto data = reinterpret_cast<const float *>(sensorData.data);
-    int32_t dataDim = GetDataDimension(sensorData.sensorTypeId);
-    for (int32_t i = 0; i < dataDim; i++) {
-        CHKPV(data);
-        strData.append(std::to_string(*data));
-        if (i != dataDim - 1) {
-            strData.append(", ");
-        }
-        ++data;
-    }
-#ifdef HIVIEWDFX_HISYSEVENT_ENABLE
-    HiSysEventWrite(HiSysEvent::Domain::SENSOR, "EVENT_REPORT",
-        HiSysEvent::EventType::BEHAVIOR, "SENSOR_ID", sensorData.sensorTypeId, "TIMESTAMP",
-        std::to_string(sensorData.timestamp), "DATA", strData);
-#endif // HIVIEWDFX_HISYSEVENT_ENABLE
 } // LCOV_EXCL_STOP
 
 int32_t PrintSensorData::GetDataDimension(int32_t sensorType)

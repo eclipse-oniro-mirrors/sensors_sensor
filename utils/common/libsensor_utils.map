@@ -31,7 +31,6 @@
             "OHOS::Sensors::PermissionUtil::CheckManageSensorPermission(unsigned int)";
             "OHOS::Sensors::ModifyAppPolicy(int, OHOS::Sensors::AppPolicyEventExt const&)";
             "OHOS::Sensors::PrintSensorData::PrintHdiData(OHOS::Sensors::SensorData const&)";
-            "OHOS::Sensors::PrintSensorData::ProcessHdiDFX(OHOS::Sensors::SensorData const&)";
             "OHOS::Sensors::PrintSensorData::ResetHdiTimes(int)";
             "OHOS::Sensors::PrintSensorData::PrintClientData(SensorEvent const&)";
             "OHOS::Sensors::PrintSensorData::PrintSensorInfo(SensorInfo*, int)";

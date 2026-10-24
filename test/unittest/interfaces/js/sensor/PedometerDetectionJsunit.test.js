@@ -67,13 +67,12 @@ describe("PedometerDetectionJsTest", function () {
          * @tc.teardown: teardown invoked after each testcases
          */
         console.info('afterEach called')
-        let atManager = abilityAccessCtrl.createAtManager();
-        atManager.revokeUserGrantedPermission(CommonConstants.tokenID, CommonConstants.permissionNameUser,
-            CommonConstants.PermissionFlag.PERMISSION_USER_SET)
-        .catch((err) => {
-            console.info('err:' + JSON.stringify(err));
-            expect(err.code).assertEqual(ERR_NOT_HAVE_PERMISSION);
-        })
+        // ACTIVITY_MOTION is intentionally NOT revoked here: revoking a user
+        // granted permission of the running app makes the access token manager
+        // kill this process (PermissionManager::UpdateTokenPermissionState ->
+        // KillProcessForPermissionUpdate), which aborts all remaining
+        // testcases. Each case grants the permission before using the sensor
+        // interfaces, and the granted state is kept during the whole suite.
     })
 
     /*

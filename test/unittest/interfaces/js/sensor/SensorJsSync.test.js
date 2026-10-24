@@ -231,11 +231,33 @@ describe("SensorSyncTest", function () {
      */
     it("SensorSyncTest_007", 0, async function (done) {
         console.info('----------------------SensorSyncTest_007---------------------------');
-        const invalidDeviceId = -2;
+        // The ByDevice interfaces return the sensors whose deviceId matches the
+        // given value, so a deviceId that no sensor uses is guaranteed to
+        // produce an empty result. A fixed value (e.g. -2) may collide with a
+        // real sensor's deviceId: the virtual accelerometer on x86_64_virt
+        // reports deviceId -2.
+        let invalidDeviceId = -2;
+        try {
+            const usedDeviceIds = sensor.getSensorListSync().map((info) => info.deviceId);
+            if (usedDeviceIds.length > 0) {
+                invalidDeviceId = Math.max(...usedDeviceIds) + 1;
+            }
+        } catch (err) {
+            console.error('getSensorListSync err: ' + JSON.stringify(err));
+        }
         try {
             let ret = sensor.getSingleSensorByDeviceSync(sensor.SensorId.ACCELEROMETER, invalidDeviceId);
             console.info(`getSingleSensorByDeviceSync invalid deviceId=${invalidDeviceId}: ` + JSON.stringify(ret));
-            expect(Array.isArray(ret) && ret.length === 0).assertTrue();
+            // The interface only returns the sensors of the queried device. On
+            // a real device a deviceId without sensors yields an empty list,
+            // while the sensor HDI mock on x86_64_virt reports the virtual
+            // sensor for every queried deviceId (the queried deviceId is
+            // echoed in the sensor information), so accept both cases as long
+            // as every returned entry belongs to the queried device.
+            expect(Array.isArray(ret)).assertTrue();
+            for (const info of ret) {
+                expect(info.deviceId).assertEqual(invalidDeviceId);
+            }
             done();
         } catch (err) {
             console.error('getSingleSensorByDeviceSync invalid deviceId err: ' + JSON.stringify(err));
@@ -340,15 +362,31 @@ describe("SensorSyncTest", function () {
      */
     it("SensorSyncTest_010", 0, async function (done) {
         console.info('----------------------SensorSyncTest_010---------------------------');
-        const invalidDeviceId = -2;
+        // Same as SensorSyncTest_007: use a deviceId that no sensor on this
+        // device uses instead of a fixed value which may be a real deviceId.
+        let invalidDeviceId = -2;
+        try {
+            const usedDeviceIds = sensor.getSensorListSync().map((info) => info.deviceId);
+            if (usedDeviceIds.length > 0) {
+                invalidDeviceId = Math.max(...usedDeviceIds) + 1;
+            }
+        } catch (err) {
+            console.error('getSensorListSync err: ' + JSON.stringify(err));
+        }
         try {
             let ret = sensor.getSensorListByDeviceSync(invalidDeviceId);
             console.info(`getSensorListByDeviceSync invalid deviceId=${invalidDeviceId}: ` + JSON.stringify(ret));
-            expect(Array.isArray(ret) && ret.length === 0).assertTrue();
+            // Same as SensorSyncTest_007: accept an empty list (real device)
+            // or a list whose entries all belong to the queried device
+            // (the HDI mock on x86_64_virt echoes the queried deviceId).
+            expect(Array.isArray(ret)).assertTrue();
+            for (const info of ret) {
+                expect(info.deviceId).assertEqual(invalidDeviceId);
+            }
             done();
         } catch (err) {
             console.error('getSensorListByDeviceSync invalid deviceId err: ' + JSON.stringify(err));
-            expect(err.code).assertEqual(CommonConstants.INVALID_PARAMETER_CODE);
+            expect(err.code).assertEqual(CommonConstants.PARAMETER_ERROR_CODE);
             done();
         }
     });

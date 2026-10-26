@@ -67,12 +67,6 @@ describe("PedometerDetectionJsTest", function () {
          * @tc.teardown: teardown invoked after each testcases
          */
         console.info('afterEach called')
-        // ACTIVITY_MOTION is intentionally NOT revoked here: revoking a user
-        // granted permission of the running app makes the access token manager
-        // kill this process (PermissionManager::UpdateTokenPermissionState ->
-        // KillProcessForPermissionUpdate), which aborts all remaining
-        // testcases. Each case grants the permission before using the sensor
-        // interfaces, and the granted state is kept during the whole suite.
     })
 
     /*
@@ -516,10 +510,6 @@ describe("PedometerDetectionJsTest", function () {
                 }
                 try {
                     sensor.on(sensor.SensorId.PEDOMETER_DETECTION, callback);
-                    // The permission granted by previous cases is not revoked, because
-                    // revoking it would kill the running app process. So on() may succeed
-                    // here: unsubscribe and finish instead of waiting for sensor data,
-                    // which may never be reported by devices without such a sensor.
                     setTimeout(() => {
                         sensor.off(sensor.SensorId.PEDOMETER_DETECTION);
                         done();

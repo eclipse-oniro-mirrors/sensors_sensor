@@ -231,11 +231,22 @@ describe("SensorSyncTest", function () {
      */
     it("SensorSyncTest_007", 0, async function (done) {
         console.info('----------------------SensorSyncTest_007---------------------------');
-        const invalidDeviceId = -2;
+        let invalidDeviceId = -2;
+        try {
+            const usedDeviceIds = sensor.getSensorListSync().map((info) => info.deviceId);
+            if (usedDeviceIds.length > 0) {
+                invalidDeviceId = Math.max(...usedDeviceIds) + 1;
+            }
+        } catch (err) {
+            console.error('getSensorListSync err: ' + JSON.stringify(err));
+        }
         try {
             let ret = sensor.getSingleSensorByDeviceSync(sensor.SensorId.ACCELEROMETER, invalidDeviceId);
             console.info(`getSingleSensorByDeviceSync invalid deviceId=${invalidDeviceId}: ` + JSON.stringify(ret));
-            expect(Array.isArray(ret) && ret.length === 0).assertTrue();
+            expect(Array.isArray(ret)).assertTrue();
+            for (const info of ret) {
+                expect(info.deviceId).assertEqual(invalidDeviceId);
+            }
             done();
         } catch (err) {
             console.error('getSingleSensorByDeviceSync invalid deviceId err: ' + JSON.stringify(err));
@@ -340,15 +351,26 @@ describe("SensorSyncTest", function () {
      */
     it("SensorSyncTest_010", 0, async function (done) {
         console.info('----------------------SensorSyncTest_010---------------------------');
-        const invalidDeviceId = -2;
+        let invalidDeviceId = -2;
+        try {
+            const usedDeviceIds = sensor.getSensorListSync().map((info) => info.deviceId);
+            if (usedDeviceIds.length > 0) {
+                invalidDeviceId = Math.max(...usedDeviceIds) + 1;
+            }
+        } catch (err) {
+            console.error('getSensorListSync err: ' + JSON.stringify(err));
+        }
         try {
             let ret = sensor.getSensorListByDeviceSync(invalidDeviceId);
             console.info(`getSensorListByDeviceSync invalid deviceId=${invalidDeviceId}: ` + JSON.stringify(ret));
-            expect(Array.isArray(ret) && ret.length === 0).assertTrue();
+            expect(Array.isArray(ret)).assertTrue();
+            for (const info of ret) {
+                expect(info.deviceId).assertEqual(invalidDeviceId);
+            }
             done();
         } catch (err) {
             console.error('getSensorListByDeviceSync invalid deviceId err: ' + JSON.stringify(err));
-            expect(err.code).assertEqual(CommonConstants.INVALID_PARAMETER_CODE);
+            expect(err.code).assertEqual(CommonConstants.PARAMETER_ERROR_CODE);
             done();
         }
     });

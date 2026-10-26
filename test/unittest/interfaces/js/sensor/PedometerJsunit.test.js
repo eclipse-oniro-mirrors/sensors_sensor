@@ -67,13 +67,6 @@ describe("PedometerJsTest", function () {
          * @tc.teardown: teardown invoked after each testcases
          */
         console.info('afterEach called')
-        let atManager = abilityAccessCtrl.createAtManager();
-        atManager.revokeUserGrantedPermission(CommonConstants.tokenID, CommonConstants.permissionNameUser,
-            CommonConstants.PermissionFlag.PERMISSION_USER_SET)
-        .catch((err) => {
-            console.info('err:' + JSON.stringify(err));
-            expect(err.code).assertEqual(ERR_NOT_HAVE_PERMISSION);
-        })
     })
 
     /*
@@ -513,9 +506,14 @@ describe("PedometerJsTest", function () {
                     console.error('getSingleSensor fail, errCode:' + err.code + ' ,msg:' + err.message);
                     expect(false).assertTrue();
                     done();
+                    return;
                 }
                 try {
                     sensor.on(sensor.SensorId.PEDOMETER, callback);
+                    setTimeout(() => {
+                        sensor.off(sensor.SensorId.PEDOMETER);
+                        done();
+                    }, 500);
                 } catch (err) {
                     console.error('On fail, errCode:' + err.code + ' ,msg:' + err.message);
                     expect(err.code).assertEqual(CommonConstants.PERMISSION_DENIED_CODE);

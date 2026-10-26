@@ -512,9 +512,18 @@ describe("PedometerDetectionJsTest", function () {
                     console.error('getSingleSensor fail, errCode:' + err.code + ' ,msg:' + err.message);
                     expect(false).assertTrue();
                     done();
+                    return;
                 }
                 try {
                     sensor.on(sensor.SensorId.PEDOMETER_DETECTION, callback);
+                    // The permission granted by previous cases is not revoked, because
+                    // revoking it would kill the running app process. So on() may succeed
+                    // here: unsubscribe and finish instead of waiting for sensor data,
+                    // which may never be reported by devices without such a sensor.
+                    setTimeout(() => {
+                        sensor.off(sensor.SensorId.PEDOMETER_DETECTION);
+                        done();
+                    }, 500);
                 } catch (err) {
                     console.error('On fail, errCode:' + err.code + ' ,msg:' + err.message);
                     expect(err.code).assertEqual(CommonConstants.PERMISSION_DENIED_CODE);

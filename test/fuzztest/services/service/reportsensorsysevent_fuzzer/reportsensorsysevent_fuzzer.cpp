@@ -25,7 +25,7 @@
 #include "token_setproc.h"
 
 #include "sensor.h"
-#include "sensor_service.h"
+#include "sensor_manager.h"
 
 namespace OHOS {
 namespace Sensors {
@@ -33,7 +33,6 @@ using namespace Security::AccessToken;
 using Security::AccessToken::AccessTokenID;
 namespace {
 constexpr size_t U32_AT_SIZE = 4;
-auto g_service = SensorDelayedSpSingleton<SensorService>::GetInstance();
 } // namespace
 
 template<class T>
@@ -84,7 +83,7 @@ bool ReportSensorSysEventFuzzTest(const uint8_t *data, size_t size)
     startPos += GetObject<bool>(enable, data + startPos, size - startPos);
     int32_t pid = 0;
     startPos += GetObject<int32_t>(pid, data + startPos, size - startPos);
-    g_service->ReportSensorSysEvent(sensorId, enable, pid);
+    SensorManager::GetInstance().ReportSensorSysEvent(sensorId, enable, pid);
     return true;
 }
 }  // namespace Sensors

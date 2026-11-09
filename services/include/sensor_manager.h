@@ -16,6 +16,7 @@
 #ifndef SENSOR_MANAGER_H
 #define SENSOR_MANAGER_H
 
+#include <atomic>
 #include <thread>
 
 #ifdef HDF_DRIVERS_INTERFACE_SENSOR
@@ -45,7 +46,10 @@ public:
         int64_t maxReportDelayNs);
     bool IsOtherClientUsingSensor(const SensorDescription &sensorDesc, int32_t clientPid);
     ErrCode AfterDisableSensor(const SensorDescription &sensorDesc);
-    void GetPackageName(AccessTokenID tokenId, std::string &packageName, bool isAccessTokenServiceActive = false);
+    void GetPackageName(AccessTokenID tokenId, std::string &packageName);
+    static void SetAccessTokenServiceActive(bool isActive);
+    void ReportSensorSysEvent(int32_t sensorType, bool enable, int32_t pid, int64_t samplingPeriodNs = 0,
+        int64_t maxReportDelayNs = 0);
 
 private:
 #ifdef HDF_DRIVERS_INTERFACE_SENSOR
@@ -55,6 +59,7 @@ private:
     sptr<ReportDataCallback> reportDataCallback_ = nullptr;
 #endif // HDF_DRIVERS_INTERFACE_SENSOR
     ClientInfo &clientInfo_ = ClientInfo::GetInstance();
+    static std::atomic_bool isAccessTokenServiceActive_;
     std::unordered_map<SensorDescription, Sensor> sensorMap_;
     std::mutex sensorMapMutex_;
 };

@@ -89,6 +89,8 @@ bool SensorPowerPolicy::Suspend(int32_t pid, const std::vector<SensorDescription
         if (ret != ERR_OK) {
             isAllSuspend = false;
             SEN_HILOGE("Hdi disable sensor failed, sensorType:%{public}d, ret:%{public}d", sensorDesc.sensorType, ret);
+        } else {
+            sensorManager_.ReportSensorSysEvent(sensorDesc.sensorType, false, pid);
         }
 #endif // HDF_DRIVERS_INTERFACE_SENSOR
         sensorInfoMap.insert(std::make_pair(sensorDesc, sensorInfo));
@@ -158,6 +160,7 @@ bool SensorPowerPolicy::Resume(int32_t pid, const SensorDescription &sensorDesc,
         clientInfo_.RemoveSubscriber(sensorDesc, pid);
         return false;
     }
+    sensorManager_.ReportSensorSysEvent(sensorDesc.sensorType, true, pid, samplingPeriodNs, maxReportDelayNs);
 #endif // HDF_DRIVERS_INTERFACE_SENSOR
     return true;
 }

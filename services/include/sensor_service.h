@@ -95,8 +95,6 @@ private:
     void UnregisterClientDeathRecipient(sptr<IRemoteObject> sensorClient);
     bool InitSensorPolicy();
     void ReportOnChangeData(const SensorDescription &sensorDesc);
-    void ReportSensorSysEvent(int32_t sensorType, bool enable, int32_t pid, int64_t samplingPeriodNs = 0,
-        int64_t maxReportDelayNs = 0);
     ErrCode DisableSensor(const SensorDescription &sensorDesc, int32_t pid);
     bool RegisterPermCallback(int32_t sensorType);
     void UnregisterPermCallback();
@@ -139,7 +137,6 @@ private:
     std::shared_ptr<PermStateChangeCb> permStateChangeCb_ = nullptr;
     ErrCode SaveSubscriber(const SensorDescription &sensorDesc, int64_t samplingPeriodNs, int64_t maxReportDelayNs);
     std::atomic_bool isReportActiveInfo_ = false;
-    static std::atomic_bool isAccessTokenServiceActive_;
     static std::atomic_bool isMemoryMgrServiceActive_;
     static std::atomic_bool isCritical_;
     static std::atomic_bool isDataShareReady_;

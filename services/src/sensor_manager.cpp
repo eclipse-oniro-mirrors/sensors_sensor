@@ -17,12 +17,19 @@
 
 #include <cinttypes>
 
+#ifdef HIVIEWDFX_HISYSEVENT_ENABLE
+#include "hisysevent.h"
+#endif // HIVIEWDFX_HISYSEVENT_ENABLE
+
 #undef LOG_TAG
 #define LOG_TAG "SensorManager"
 
 namespace OHOS {
 namespace Sensors {
 using namespace OHOS::HiviewDFX;
+
+std::atomic_bool SensorManager::isAccessTokenServiceActive_ = false;
+
 namespace {
 #ifdef HDF_DRIVERS_INTERFACE_SENSOR
 constexpr int32_t INVALID_SENSOR_ID = -1;
@@ -182,7 +189,7 @@ ErrCode SensorManager::AfterDisableSensor(const SensorDescription &sensorDesc)
     return ERR_OK;
 }
 
-void SensorManager::GetPackageName(AccessTokenID tokenId, std::string &packageName, bool isAccessTokenServiceActive)
+void SensorManager::GetPackageName(AccessTokenID tokenId, std::string &packageName)
 {
     CALL_LOG_ENTER;
     int32_t tokenType = AccessTokenKit::GetTokenTypeFlag(tokenId);
@@ -198,7 +205,7 @@ void SensorManager::GetPackageName(AccessTokenID tokenId, std::string &packageNa
         }
         case ATokenTypeEnum::TOKEN_NATIVE:
         case ATokenTypeEnum::TOKEN_SHELL: {
-            if (!isAccessTokenServiceActive) {
+            if (!isAccessTokenServiceActive_) {
                 SEN_HILOGE("Access token service is inactive");
                 return;
             }
@@ -214,6 +221,39 @@ void SensorManager::GetPackageName(AccessTokenID tokenId, std::string &packageNa
             SEN_HILOGW("Token type not match");
             break;
         }
+    }
+}
+
+void SensorManager::SetAccessTokenServiceActive(bool isActive)
+{
+    isAccessTokenServiceActive_ = isActive;
+}
+
+void SensorManager::ReportSensorSysEvent(int32_t sensorType, bool enable, int32_t pid, int64_t samplingPeriodNs,
+    int64_t maxReportDelayNs)
+{
+    std::string packageName("");
+    AccessTokenID tokenId = clientInfo_.GetTokenIdByPid(pid);
+    GetPackageName(tokenId, packageName);
+#ifdef HIVIEWDFX_HISYSEVENT_ENABLE
+    const int logLevel = 4;
+    int32_t uid = clientInfo_.GetUidByPid(pid);
+#endif // HIVIEWDFX_HISYSEVENT_ENABLE
+    if (enable) {
+#ifdef HIVIEWDFX_HISYSEVENT_ENABLE
+        HiSysEventWrite(HiSysEvent::Domain::SENSOR, "ENABLE_SENSOR", HiSysEvent::EventType::STATISTIC,
+            "LEVEL", logLevel, "PKG_NAME", packageName, "TYPE", sensorType, "UID", uid, "PID", pid);
+#endif // HIVIEWDFX_HISYSEVENT_ENABLE
+        SEN_HILOGI("PackageName:%{public}s open the sensor, sensorType:%{public}d, pid:%{public}d, "
+            "samplingPeriodNs:%{public}" PRId64 ", maxReportDelayNs:%{public}" PRId64, packageName.c_str(),
+            sensorType, pid, samplingPeriodNs, maxReportDelayNs);
+    } else {
+#ifdef HIVIEWDFX_HISYSEVENT_ENABLE
+        HiSysEventWrite(HiSysEvent::Domain::SENSOR, "DISABLE_SENSOR", HiSysEvent::EventType::STATISTIC,
+            "LEVEL", logLevel, "TYPE", sensorType, "PKG_NAME", packageName, "UID", uid, "PID", pid);
+#endif // HIVIEWDFX_HISYSEVENT_ENABLE
+        SEN_HILOGI("PackageName:%{public}s close the sensor, sensorType:%{public}d, pid:%{public}d",
+            packageName.c_str(), sensorType, pid);
     }
 }
 } // namespace Sensors

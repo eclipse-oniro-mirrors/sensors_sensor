@@ -70,7 +70,6 @@ const std::set<int32_t> g_needLoadMotionLibType = {
 };
 } // namespace
 
-std::atomic_bool SensorService::isAccessTokenServiceActive_ = false;
 std::atomic_bool SensorService::isMemoryMgrServiceActive_ = false;
 std::atomic_bool SensorService::isCritical_ = false;
 std::atomic_bool SensorService::isDataShareReady_ = false;
@@ -195,7 +194,7 @@ void SensorService::OnAddSystemAbility(int32_t systemAbilityId, const std::strin
 #endif // MEMMGR_ENABLE
 #ifdef ACCESS_TOKEN_ENABLE
     if (systemAbilityId == ACCESS_TOKEN_MANAGER_SERVICE_ID) {
-        isAccessTokenServiceActive_ = true;
+        sensorManager_.SetAccessTokenServiceActive(true);
     }
 #endif // ACCESS_TOKEN_ENABLE
     if (systemAbilityId == DISPLAY_MANAGER_SERVICE_SA_ID) {
@@ -326,7 +325,7 @@ void SensorService::OnRemoveSystemAbility(int32_t systemAbilityId, const std::st
     SEN_HILOGI("OnRemoveSystemAbility systemAbilityId:%{public}d", systemAbilityId);
 #ifdef ACCESS_TOKEN_ENABLE
     if (systemAbilityId == ACCESS_TOKEN_MANAGER_SERVICE_ID) {
-        isAccessTokenServiceActive_ = false;
+        sensorManager_.SetAccessTokenServiceActive(false);
     }
 #endif // ACCESS_TOKEN_ENABLE
 #ifdef MEMMGR_ENABLE
@@ -465,34 +464,6 @@ void SensorService::OnStop()
     Memory::MemMgrClient::GetInstance().NotifyProcessStatus(getpid(), PROCESS_TYPE_SA, PROCESS_STATUS_DIED,
         SENSOR_SERVICE_ABILITY_ID);
 #endif // MEMMGR_ENABLE
-}
-
-void SensorService::ReportSensorSysEvent(int32_t sensorType, bool enable, int32_t pid, int64_t samplingPeriodNs,
-    int64_t maxReportDelayNs)
-{
-    std::string packageName("");
-    AccessTokenID tokenId = clientInfo_.GetTokenIdByPid(pid);
-    sensorManager_.GetPackageName(tokenId, packageName, isAccessTokenServiceActive_);
-#ifdef HIVIEWDFX_HISYSEVENT_ENABLE
-    const int logLevel = 4;
-    int32_t uid = clientInfo_.GetUidByPid(pid);
-#endif // HIVIEWDFX_HISYSEVENT_ENABLE
-    if (enable) {
-#ifdef HIVIEWDFX_HISYSEVENT_ENABLE
-        HiSysEventWrite(HiSysEvent::Domain::SENSOR, "ENABLE_SENSOR", HiSysEvent::EventType::STATISTIC,
-            "LEVEL", logLevel, "PKG_NAME", packageName, "TYPE", sensorType, "UID", uid, "PID", pid);
-#endif // HIVIEWDFX_HISYSEVENT_ENABLE
-        SEN_HILOGI("PackageName:%{public}s open the sensor, sensorType:%{public}d, pid:%{public}d, "
-            "samplingPeriodNs:%{public}" PRId64 ", samplingPeriodNs:%{public}" PRId64, packageName.c_str(),
-            sensorType, pid, samplingPeriodNs, maxReportDelayNs);
-    } else {
-#ifdef HIVIEWDFX_HISYSEVENT_ENABLE
-        HiSysEventWrite(HiSysEvent::Domain::SENSOR, "DISABLE_SENSOR", HiSysEvent::EventType::STATISTIC,
-            "LEVEL", logLevel, "TYPE", sensorType, "PKG_NAME", packageName, "UID", uid, "PID", pid);
-#endif // HIVIEWDFX_HISYSEVENT_ENABLE
-        SEN_HILOGI("PackageName:%{public}s close the sensor, sensorType:%{public}d, pid:%{public}d",
-            packageName.c_str(), sensorType, pid);
-    }
 }
 
 void SensorService::ReportOnChangeData(const SensorDescription &sensorDesc)
@@ -656,7 +627,7 @@ ErrCode SensorService::EnableSensor(const SensorDescriptionIPC &SensorDescriptio
     if ((!g_isRegister) && (RegisterPermCallback(sensorDesc.sensorType))) {
         g_isRegister = true;
     }
-    ReportSensorSysEvent(sensorDesc.sensorType, true, pid, samplingPeriodNs, maxReportDelayNs);
+    sensorManager_.ReportSensorSysEvent(sensorDesc.sensorType, true, pid, samplingPeriodNs, maxReportDelayNs);
     if (isReportActiveInfo_) {
         ReportActiveInfo(sensorDesc, pid);
     }
@@ -674,7 +645,7 @@ void SensorService::NotifyAppSubscribeSensor(int32_t sensorTypeId)
     int32_t userId = SENSOR_SHAKE_CONTROL_MGR->GetCurrentUserId();
     AccessTokenID tokenId = GetCallingTokenID();
     std::string packageName("");
-    sensorManager_.GetPackageName(tokenId, packageName, isAccessTokenServiceActive_);
+    sensorManager_.GetPackageName(tokenId, packageName);
     AppPolicyEventExt appPolicyEventExt;
     appPolicyEventExt.objectId = std::to_string(tokenId);
     appPolicyEventExt.objectType = ObjectType::ACCESS_TOKEN_ID;
@@ -706,7 +677,7 @@ ErrCode SensorService::SensorReportEvent(const SensorDescription &sensorDesc, in
         return ret;
     }
     // LCOV_EXCL_START
-    ReportSensorSysEvent(sensorDesc.sensorType, true, pid, samplingPeriodNs, maxReportDelayNs);
+    sensorManager_.ReportSensorSysEvent(sensorDesc.sensorType, true, pid, samplingPeriodNs, maxReportDelayNs);
     if (ret != ERR_OK) {
         SEN_HILOGE("ret:%{public}d", ret);
     }
@@ -732,7 +703,7 @@ ErrCode SensorService::DisableSensor(const SensorDescription &sensorDesc, int32_
         SEN_HILOGE("pid is invalid, pid:%{public}d", pid);
         return CLIENT_PID_INVALID_ERR;
     }
-    ReportSensorSysEvent(sensorDesc.sensorType, false, pid);
+    sensorManager_.ReportSensorSysEvent(sensorDesc.sensorType, false, pid);
     std::lock_guard<std::mutex> serviceLock(serviceLock_);
     POWER_POLICY.DeleteDisablePidSensorInfo(sensorDesc, pid);
     if (sensorManager_.IsOtherClientUsingSensor(sensorDesc, pid)) {
@@ -927,7 +898,7 @@ ErrCode SensorService::TransferDataChannel(int32_t sendFd, const sptr<IRemoteObj
     } // LCOV_EXCL_STOP
     sensorBasicDataChannel->SetSensorStatus(true);
     std::string packageName("");
-    sensorManager_.GetPackageName(callerToken, packageName, isAccessTokenServiceActive_);
+    sensorManager_.GetPackageName(callerToken, packageName);
     SEN_HILOGI("Calling packageName:%{public}s", packageName.c_str());
     sensorBasicDataChannel->SetPackageName(packageName);
     sensorBasicDataChannel->SetUserId(SENSOR_SHAKE_CONTROL_MGR->GetCurrentUserId());

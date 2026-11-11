@@ -219,10 +219,6 @@ ohos_unittest("AsyncCallbackInfoTest") {
     "$SUBSYSTEM_DIR/frameworks/js/napi/include",
     "$SUBSYSTEM_DIR/interfaces/inner_api",
     "$SUBSYSTEM_DIR/utils/common/include",
-    "//foundation/arkui/napi/interfaces/kits",
-    "//foundation/arkui/napi/interfaces/inner_api",
-    "//third_party/libuv/include",
-    "//third_party/node/src",
   ]
 
   external_deps = [
@@ -230,6 +226,9 @@ ohos_unittest("AsyncCallbackInfoTest") {
     "googletest:gmock",
     "googletest:gtest_main",
     "hilog:libhilog",
+    "libuv:uv",
+    "napi:ace_napi",
+    "node:node_header_notice",
   ]
 }
 

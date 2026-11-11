@@ -888,6 +888,10 @@ ErrCode SensorService::TransferDataChannel(int32_t sendFd, const sptr<IRemoteObj
     auto pid = GetCallingPid();
     auto uid = GetCallingUid();
     auto callerToken = GetCallingTokenID();
+    std::string packageName("");
+    sensorManager_.GetPackageName(callerToken, packageName);
+    SEN_HILOGI("Calling packageName:%{public}s", packageName.c_str());
+    std::lock_guard<std::mutex> serviceLock(serviceLock_);
     if (!clientInfo_.UpdateAppThreadInfo(pid, uid, callerToken)) { // LCOV_EXCL_START
         SEN_HILOGE("UpdateUid is failed");
         return UPDATE_UID_ERR;
@@ -897,9 +901,6 @@ ErrCode SensorService::TransferDataChannel(int32_t sendFd, const sptr<IRemoteObj
         return UPDATE_SENSOR_CHANNEL_ERR;
     } // LCOV_EXCL_STOP
     sensorBasicDataChannel->SetSensorStatus(true);
-    std::string packageName("");
-    sensorManager_.GetPackageName(callerToken, packageName);
-    SEN_HILOGI("Calling packageName:%{public}s", packageName.c_str());
     sensorBasicDataChannel->SetPackageName(packageName);
     sensorBasicDataChannel->SetUserId(SENSOR_SHAKE_CONTROL_MGR->GetCurrentUserId());
     sensorBasicDataChannel->SetAccessTokenId(std::to_string(callerToken));

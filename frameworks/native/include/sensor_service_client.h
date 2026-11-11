@@ -71,6 +71,7 @@ private:
     void WriteHiSysIPCEventSplit(ISensorServiceIpcCode code, int32_t ret);
     int32_t DealAfterServiceAlive();
     bool LoadSensorService();
+    std::vector<Sensor> GetSensorListByDeviceLocked(int32_t deviceId);
     std::mutex clientMutex_;
     sptr<IRemoteObject::DeathRecipient> serviceDeathObserver_ = nullptr;
     sptr<ISensorService> sensorServer_ = nullptr;

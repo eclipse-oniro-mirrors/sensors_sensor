@@ -166,13 +166,8 @@ void StreamServer::DelSession(int32_t pid)
     idxPidMap_.erase(pidIt);
     auto fdIt = sessionsMap_.find(fd);
     if (fdIt != sessionsMap_.end()) {
+        fdIt->second->Close();
         sessionsMap_.erase(fdIt);
-    }
-    if (fd >= 0) {
-        int32_t ret = fdsan_close_with_tag(fd, TAG);
-        if (ret != 0) {
-            SEN_HILOGE("Socket fd close failed, ret:%{public}d, errno:%{public}d", ret, errno);
-        }
     }
 }
 } // namespace Sensors

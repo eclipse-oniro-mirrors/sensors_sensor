@@ -68,6 +68,9 @@ void SensorFileDescriptorListener::ExcuteCallback(int32_t length)
         SEN_HILOGE("num:%{public}d is invalid", num);
         return;
     }
+    DataChannelCB dataCB = channel_->GetDataCB();
+    CHKPV(dataCB);
+    void *privateData = channel_->GetData();
     for (int i = 0; i < num; i++) {
         SensorEvent event = {
             .sensorTypeId = receiveDataBuff_[i].sensorTypeId,
@@ -84,7 +87,7 @@ void SensorFileDescriptorListener::ExcuteCallback(int32_t length)
         if (receiveDataBuff_[i].sensorTypeId == SENSOR_TYPE_ID_HALL_EXT) {
             PrintSensorData::GetInstance().PrintSensorDataLog("ExcuteCallback", receiveDataBuff_[i]);
         }
-        channel_->dataCB_(&event, 1, channel_->privateData_);
+        dataCB(&event, 1, privateData);
     }
 }
 

@@ -245,7 +245,7 @@ int32_t SensorServiceClient::GetSensorListByDevice(int32_t deviceId, std::vector
         }
     }
     if (singleDevSensors.empty()) {
-        singleDevSensors = GetSensorListByDevice(deviceId);
+        singleDevSensors = GetSensorListByDeviceLocked(deviceId);
         if (singleDevSensors.empty()) {
             SEN_HILOGW("singleDevSensors is empty");
         }
@@ -256,6 +256,12 @@ int32_t SensorServiceClient::GetSensorListByDevice(int32_t deviceId, std::vector
 std::vector<Sensor> SensorServiceClient::GetSensorListByDevice(int32_t deviceId)
 {
     CALL_LOG_ENTER;
+    std::lock_guard<std::mutex> clientLock(clientMutex_);
+    return GetSensorListByDeviceLocked(deviceId);
+}
+
+std::vector<Sensor> SensorServiceClient::GetSensorListByDeviceLocked(int32_t deviceId)
+{
     std::vector<Sensor> singleDevSensors;
     if (sensorServer_ == nullptr) {
         SEN_HILOGE("sensorServer_ is nullptr");
@@ -681,12 +687,14 @@ int32_t SensorServiceClient::Unregister(SensorActiveInfoCB callback)
         SEN_HILOGE("InitServiceClient failed, ret:%{public}d", ret);
         return ret;
     }
-    std::lock_guard<std::mutex> clientLock(clientMutex_);
-    CHKPR(sensorServer_, ERROR);
+    {
+        std::lock_guard<std::mutex> clientLock(clientMutex_);
+        CHKPR(sensorServer_, ERROR);
 #ifdef HIVIEWDFX_HITRACE_ENABLE
-    StartTrace(HITRACE_TAG_SENSORS, "DisableActiveInfoCB");
+        StartTrace(HITRACE_TAG_SENSORS, "DisableActiveInfoCB");
 #endif // HIVIEWDFX_HITRACE_ENABLE
-    ret = sensorServer_->DisableActiveInfoCB();
+        ret = sensorServer_->DisableActiveInfoCB();
+    }
     WriteHiSysIPCEvent(ISensorServiceIpcCode::COMMAND_DISABLE_ACTIVE_INFO_C_B, ret);
 #ifdef HIVIEWDFX_HITRACE_ENABLE
     FinishTrace(HITRACE_TAG_SENSORS);
@@ -699,6 +707,8 @@ int32_t SensorServiceClient::Unregister(SensorActiveInfoCB callback)
 #ifdef HIVIEWDFX_HITRACE_ENABLE
     StartTrace(HITRACE_TAG_SENSORS, "DestroySocketChannel");
 #endif // HIVIEWDFX_HITRACE_ENABLE
+    std::lock_guard<std::mutex> clientLock(clientMutex_);
+    CHKPR(sensorServer_, ERROR);
     CHKPR(sensorClientStub_, INVALID_POINTER);
     auto remoteObject = sensorClientStub_->AsObject();
     CHKPR(remoteObject, INVALID_POINTER);

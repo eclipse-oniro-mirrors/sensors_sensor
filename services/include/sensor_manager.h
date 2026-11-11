@@ -55,6 +55,7 @@ private:
 #ifdef HDF_DRIVERS_INTERFACE_SENSOR
     SensorHdiConnection &sensorHdiConnection_ = SensorHdiConnection::GetInstance();
     std::thread dataThread_;
+    std::mutex dataThreadMutex_;
     sptr<SensorDataProcesser> sensorDataProcesser_ = nullptr;
     sptr<ReportDataCallback> reportDataCallback_ = nullptr;
 #endif // HDF_DRIVERS_INTERFACE_SENSOR

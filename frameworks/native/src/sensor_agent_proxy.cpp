@@ -94,15 +94,14 @@ void SensorAgentProxy::HandleSensorData(SensorEvent *events,
 void SensorAgentProxy::SetIsChannelCreated(bool isChannelCreated)
 {
     CALL_LOG_ENTER;
-    std::lock_guard<std::mutex> chanelLock(chanelMutex_);
-    isChannelCreated_ = isChannelCreated;
+    isChannelCreated_.store(isChannelCreated);
 }
 
 int32_t SensorAgentProxy::CreateSensorDataChannel()
 {
     CALL_LOG_ENTER;
     std::lock_guard<std::mutex> chanelLock(chanelMutex_);
-    if (isChannelCreated_) {
+    if (isChannelCreated_.load()) {
         SEN_HILOGI("The channel has already been created");
         return ERR_OK;
     }
@@ -126,7 +125,7 @@ int32_t SensorAgentProxy::CreateSensorDataChannel()
         SEN_HILOGE("Transfer data channel failed, ret:%{public}d, destroyRet:%{public}d", ret, destroyRet);
         return ret;
     }
-    isChannelCreated_ = true;
+    isChannelCreated_.store(true);
     return ERR_OK;
 }
 
@@ -134,7 +133,7 @@ int32_t SensorAgentProxy::DestroySensorDataChannel()
 {
     CALL_LOG_ENTER;
     std::lock_guard<std::mutex> chanelLock(chanelMutex_);
-    if (!isChannelCreated_) {
+    if (!isChannelCreated_.load()) {
         SEN_HILOGI("Channel has been destroyed");
         return ERR_OK;
     }
@@ -150,7 +149,7 @@ int32_t SensorAgentProxy::DestroySensorDataChannel()
         SEN_HILOGE("Destroy service data channel fail, ret:%{public}d", ret);
         return ret;
     }
-    isChannelCreated_ = false;
+    isChannelCreated_.store(false);
     return ERR_OK;
 }
 
@@ -160,7 +159,7 @@ int32_t SensorAgentProxy::ActivateSensor(const SensorDescription &sensorDesc, co
         sensorDesc.deviceId, sensorDesc.sensorType, sensorDesc.sensorId);
     CHKPR(user, OHOS::Sensors::ERROR);
     CHKPR(user->callback, OHOS::Sensors::ERROR);
-    if (samplingInterval_ < 0 || reportInterval_ < 0) {
+    if (samplingInterval_.load() < 0 || reportInterval_.load() < 0) {
         SEN_HILOGE("SamplingPeriod or reportInterval_ is invalid");
         return ERROR;
     }
@@ -180,12 +179,14 @@ int32_t SensorAgentProxy::ActivateSensor(const SensorDescription &sensorDesc, co
         return ERROR;
     }
     SensorXcollie sensorXcollie("SensorAgentProxy:EnableSensor", XCOLLIE_TIMEOUT_15S);
-    int32_t ret = SEN_CLIENT.EnableSensor(sensorDesc, samplingInterval_, reportInterval_);
+    int32_t ret = SEN_CLIENT.EnableSensor(sensorDesc, samplingInterval_.load(), reportInterval_.load());
     if (ret != 0) {
         SEN_HILOGE("Enable sensor failed, ret:%{public}d", ret);
-        subscribeSet.erase(user);
-        if (subscribeSet.empty()) {
-            subscribeMap_.erase(sensorDesc);
+        if (ret != ERROR && ret != SENSOR_NATIVE_SAM_ERR && ret != SENSOR_NATIVE_GET_SERVICE_ERR) {
+            subscribeSet.erase(user);
+            if (subscribeSet.empty()) {
+                subscribeMap_.erase(sensorDesc);
+            }
         }
         return ret;
     }
@@ -261,8 +262,8 @@ int32_t SensorAgentProxy::SetBatch(const SensorDescription &sensorDesc, const Se
         SEN_HILOGE("Subscribe user first");
         return OHOS::Sensors::ERROR;
     }
-    samplingInterval_ = samplingInterval;
-    reportInterval_ = reportInterval;
+    samplingInterval_.store(samplingInterval);
+    reportInterval_.store(reportInterval);
     return OHOS::Sensors::SUCCESS;
 }
 

@@ -42,7 +42,12 @@ bool StreamSession::SendMsg(const char *buf, size_t size) const
         SEN_HILOGE("buf size:%{public}zu", size);
         return false;
     }
-    if (fd_ < 0) {
+    int32_t fd;
+    {
+        std::lock_guard<std::mutex> fdLock(fdMutex_);
+        fd = fd_;
+    }
+    if (fd < 0) {
         SEN_HILOGE("The fd_ is less than 0");
         return false;
     }
@@ -51,14 +56,14 @@ bool StreamSession::SendMsg(const char *buf, size_t size) const
     size_t remSize = size;
     while (remSize > 0 && retryCount < SEND_RETRY_LIMIT) {
         ++retryCount;
-        auto count = send(fd_, &buf[idx], remSize, MSG_DONTWAIT | MSG_NOSIGNAL);
+        auto count = send(fd, &buf[idx], remSize, MSG_DONTWAIT | MSG_NOSIGNAL);
         if (count < 0) {
             if (errno == EAGAIN || errno == EINTR || errno == EWOULDBLOCK) {
                 usleep(SEND_RETRY_SLEEP_TIME);
                 SEN_HILOGW("Continue for errno EAGAIN|EINTR|EWOULDBLOCK, errno:%{public}d", errno);
                 continue;
             }
-            SEN_HILOGE("Send return failed, error:%{public}d, fd:%{public}d", errno, fd_);
+            SEN_HILOGE("Send return failed, error:%{public}d, fd:%{public}d", errno, fd);
             return false;
         }
         idx += static_cast<size_t>(count);
@@ -69,7 +74,7 @@ bool StreamSession::SendMsg(const char *buf, size_t size) const
     }
     if (retryCount >= SEND_RETRY_LIMIT || remSize != 0) {
         SEN_HILOGE("Send too many times:%{public}zu/%{public}zu, size:%{public}zu/%{public}zu, fd:%{public}d",
-            retryCount, SEND_RETRY_LIMIT, idx, size, fd_);
+            retryCount, SEND_RETRY_LIMIT, idx, size, fd);
         return false;
     }
     return true;
@@ -77,6 +82,7 @@ bool StreamSession::SendMsg(const char *buf, size_t size) const
 
 void StreamSession::Close()
 {
+    std::lock_guard<std::mutex> fdLock(fdMutex_);
     if (fd_ >= 0) {
         fdsan_close_with_tag(fd_, TAG);
         fd_ = -1;
@@ -125,6 +131,7 @@ SessionPtr StreamSession::GetSharedPtr()
 
 int32_t StreamSession::GetFd() const
 {
+    std::lock_guard<std::mutex> fdLock(fdMutex_);
     return fd_;
 }
 

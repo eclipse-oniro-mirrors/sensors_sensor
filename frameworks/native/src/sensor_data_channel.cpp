@@ -28,14 +28,20 @@ int32_t SensorDataChannel::CreateSensorDataChannel(DataChannelCB callBack, void 
 {
     SEN_HILOGI("In");
     CHKPR(callBack, SENSOR_NATIVE_REGSITER_CB_ERR);
-    dataCB_ = callBack;
-    privateData_ = data;
+    {
+        std::lock_guard<std::mutex> eventRunnerLock(eventRunnerMutex_);
+        dataCB_ = callBack;
+        privateData_ = data;
+    }
     return InnerSensorDataChannel();
 }
 
 int32_t SensorDataChannel::RestoreSensorDataChannel()
 {
-    CHKPR(dataCB_, SENSOR_NATIVE_REGSITER_CB_ERR);
+    {
+        std::lock_guard<std::mutex> eventRunnerLock(eventRunnerMutex_);
+        CHKPR(dataCB_, SENSOR_NATIVE_REGSITER_CB_ERR);
+    }
     if (GetReceiveDataFd() != -1) {
         SEN_HILOGW("Restore sensor data channel failed, please destroy sensor data channel first");
         return SENSOR_CHANNEL_RESTORE_FD_ERR;
@@ -88,9 +94,9 @@ SensorDataChannel::~SensorDataChannel()
 
 int32_t SensorDataChannel::AddFdListener(int32_t fd, ReceiveMessageFun receiveMessage, DisconnectFun disconnect)
 {
+    std::lock_guard<std::mutex> eventRunnerLock(eventRunnerMutex_);
     receiveMessage_ = receiveMessage;
     disconnect_ = disconnect;
-    std::lock_guard<std::mutex> eventRunnerLock(eventRunnerMutex_);
     if (eventHandler_ == nullptr) {
         auto myRunner = AppExecFwk::EventRunner::Create(true, AppExecFwk::ThreadMode::FFRT);
         CHKPR(myRunner, ERROR);
@@ -132,12 +138,26 @@ int32_t SensorDataChannel::DelFdListener(int32_t fd)
 
 ReceiveMessageFun SensorDataChannel::GetReceiveMessageFun() const
 {
+    std::lock_guard<std::mutex> eventRunnerLock(eventRunnerMutex_);
     return receiveMessage_;
 }
 
 DisconnectFun SensorDataChannel::GetDisconnectFun() const
 {
+    std::lock_guard<std::mutex> eventRunnerLock(eventRunnerMutex_);
     return disconnect_;
+}
+
+DataChannelCB SensorDataChannel::GetDataCB() const
+{
+    std::lock_guard<std::mutex> eventRunnerLock(eventRunnerMutex_);
+    return dataCB_;
+}
+
+void* SensorDataChannel::GetData() const
+{
+    std::lock_guard<std::mutex> eventRunnerLock(eventRunnerMutex_);
+    return privateData_;
 }
 } // namespace Sensors
 } // namespace OHOS

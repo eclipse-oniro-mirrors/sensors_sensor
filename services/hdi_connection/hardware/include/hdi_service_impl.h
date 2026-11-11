@@ -16,6 +16,7 @@
 #ifndef HDI_SERVICE_IMPL_H
 #define HDI_SERVICE_IMPL_H
 
+#include <mutex>
 #include <thread>
 
 #include "sensor_agent_type.h"
@@ -47,8 +48,10 @@ private:
     static void GenerateHeadPostureEvent();
     static void GenerateProximityEvent();
     static std::vector<int32_t> enableSensors_;
+    static std::mutex enableSensorsMutex_;
     std::thread dataReportThread_;
     static std::vector<RecordSensorCallback> callbacks_;
+    static std::mutex callbacksMutex_;
     static int64_t samplingInterval_;
     static int64_t reportInterval_;
     static std::atomic_bool isStop_;

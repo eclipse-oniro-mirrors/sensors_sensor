@@ -14,8 +14,10 @@
  */
 
 #include <cinttypes>
+#include <cstdlib>
 #include <gtest/gtest.h>
 #include <thread>
+#include <unistd.h>
 
 #include "accesstoken_kit.h"
 #include "nativetoken_kit.h"
@@ -672,6 +674,52 @@ HWTEST_F(SensorAgentTest, UnsubscribeSensorPlugTest_002, TestSize.Level1)
     ASSERT_EQ(ret, OHOS::ERR_OK);
     ret = UnsubscribeSensorPlug(&user);
     ASSERT_EQ(ret, OHOS::ERR_OK);
+}
+
+HWTEST_F(SensorAgentTest, GetActiveSensorInfosTest_001, TestSize.Level1)
+{
+    SEN_HILOGI("GetActiveSensorInfosTest_001 in");
+    SensorActiveInfo *sensorActiveInfos { nullptr };
+    int32_t count { 0 };
+    int32_t ret = GetActiveSensorInfos(INVALID_VALUE, &sensorActiveInfos, &count);
+    ASSERT_NE(ret, OHOS::ERR_OK);
+    if (sensorActiveInfos != nullptr) {
+        free(sensorActiveInfos);
+        sensorActiveInfos = nullptr;
+    }
+}
+
+HWTEST_F(SensorAgentTest, GetActiveSensorInfosTest_002, TestSize.Level1)
+{
+    SEN_HILOGI("GetActiveSensorInfosTest_002 in");
+    int32_t count { 0 };
+    int32_t ret = GetActiveSensorInfos(g_localDeviceId, nullptr, &count);
+    ASSERT_NE(ret, OHOS::ERR_OK);
+}
+
+HWTEST_F(SensorAgentTest, GetActiveSensorInfosTest_003, TestSize.Level1)
+{
+    SEN_HILOGI("GetActiveSensorInfosTest_003 in");
+    SensorActiveInfo *sensorActiveInfos { nullptr };
+    int32_t ret = GetActiveSensorInfos(g_localDeviceId, &sensorActiveInfos, nullptr);
+    ASSERT_NE(ret, OHOS::ERR_OK);
+    if (sensorActiveInfos != nullptr) {
+        free(sensorActiveInfos);
+        sensorActiveInfos = nullptr;
+    }
+}
+
+HWTEST_F(SensorAgentTest, GetActiveSensorInfosTest_004, TestSize.Level1)
+{
+    SEN_HILOGI("GetActiveSensorInfosTest_004 in");
+    SensorActiveInfo *sensorActiveInfos { nullptr };
+    int32_t count { 0 };
+    int32_t ret = GetActiveSensorInfos(getpid(), &sensorActiveInfos, &count);
+    ASSERT_EQ(ret, OHOS::Sensors::ErrorCode::PERMISSION_DENIED);
+    if (sensorActiveInfos != nullptr) {
+        free(sensorActiveInfos);
+        sensorActiveInfos = nullptr;
+    }
 }
 } // namespace Sensors
 } // namespace OHOS

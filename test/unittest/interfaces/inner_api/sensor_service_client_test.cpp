@@ -156,5 +156,13 @@ HWTEST_F(SensorServiceClientTest, SensorServiceClientDestructor_002, TestSize.Le
     delete sensorServiceClient;
     sensorServiceClient = nullptr;
 }
+
+HWTEST_F(SensorServiceClientTest, GetSensorListByDeviceTest_001, TestSize.Level1)
+{
+    SEN_HILOGI("GetSensorListByDeviceTest_001 in");
+    sensorServiceClient->sensorServer_ = nullptr;
+    std::vector<Sensor> sensors = sensorServiceClient->GetSensorListByDevice(0);
+    EXPECT_TRUE(sensors.empty());
+}
 } // namespace Sensors
 } // namespace OHOS

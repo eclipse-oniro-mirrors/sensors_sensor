@@ -59,12 +59,18 @@ constexpr int32_t HDI_DISABLE_SENSOR_TIMEOUT = -23;
 
 int32_t SensorHdiConnection::ConnectHdi()
 {
-    iSensorHdiConnection_ = std::make_unique<HdiConnection>();
+    {
+        std::lock_guard<std::mutex> sensorLock(sensorMutex_);
+        iSensorHdiConnection_ = std::make_unique<HdiConnection>();
+    }
     int32_t ret = ConnectHdiService();
     if (ret != ERR_OK) {
         SEN_HILOGE("Connect hdi service failed, try to connect compatible connection, ret:%{public}d", ret);
 #ifdef BUILD_VARIANT_ENG
-        iSensorHdiConnection_ = std::make_unique<CompatibleConnection>();
+        {
+            std::lock_guard<std::mutex> sensorLock(sensorMutex_);
+            iSensorHdiConnection_ = std::make_unique<CompatibleConnection>();
+        }
         ret = ConnectHdiService();
         if (ret != ERR_OK) {
             SEN_HILOGE("Connect compatible connection failed, ret:%{public}d", ret);
@@ -88,6 +94,7 @@ int32_t SensorHdiConnection::ConnectHdi()
 
 int32_t SensorHdiConnection::ConnectSensorTransformHdi()
 {
+    std::lock_guard<std::mutex> sensorLock(sensorMutex_);
     CHKPR(iSensorHdiConnection_, CONNECT_TRANSFORM_ERR);
     int32_t ret = iSensorHdiConnection_->ConnectSensorTransformHdi();
     if (ret != ERR_OK) {
@@ -99,6 +106,7 @@ int32_t SensorHdiConnection::ConnectSensorTransformHdi()
 
 int32_t SensorHdiConnection::TransformSensorData(uint32_t state, uint32_t policy, SensorData* sensorData)
 {
+    std::lock_guard<std::mutex> sensorLock(sensorMutex_);
     CHKPR(iSensorHdiConnection_, CONNECT_TRANSFORM_ERR);
     CHKPR(sensorData, ERROR);
     if (policy == CONVERT_ROTATION_0 || policy > CONVERT_ROTATION_270) {
@@ -244,8 +252,8 @@ Sensor SensorHdiConnection::GenerateProximitySensor()
 
 int32_t SensorHdiConnection::GetSensorList(std::vector<Sensor> &sensorList)
 {
-    CHKPR(iSensorHdiConnection_, GET_SENSOR_LIST_ERR);
     std::lock_guard<std::mutex> sensorLock(sensorMutex_);
+    CHKPR(iSensorHdiConnection_, GET_SENSOR_LIST_ERR);
     if (sensorList_.empty()) {
         if (iSensorHdiConnection_->GetSensorList(sensorList_) != ERR_OK) {
             SEN_HILOGW("Get sensor list failed");
@@ -305,6 +313,7 @@ int32_t SensorHdiConnection::EnableSensor(const SensorDescription &sensorDesc)
         return ret;
     }
 #endif // BUILD_VARIANT_ENG
+    std::lock_guard<std::mutex> sensorLock(sensorMutex_);
     CHKPR(iSensorHdiConnection_, ENABLE_SENSOR_ERR);
     ret = iSensorHdiConnection_->EnableSensor(sensorDesc);
 #ifdef HIVIEWDFX_HITRACE_ENABLE
@@ -340,6 +349,7 @@ int32_t SensorHdiConnection::DisableSensor(const SensorDescription &sensorDesc)
         return ret;
     }
 #endif // BUILD_VARIANT_ENG
+    std::lock_guard<std::mutex> sensorLock(sensorMutex_);
     CHKPR(iSensorHdiConnection_, DISABLE_SENSOR_ERR);
     ret = iSensorHdiConnection_->DisableSensor(sensorDesc);
 #ifdef HIVIEWDFX_HITRACE_ENABLE
@@ -379,6 +389,7 @@ int32_t SensorHdiConnection::SetBatch(const SensorDescription &sensorDesc, int64
         return ret;
     }
 #endif // BUILD_VARIANT_ENG
+    std::lock_guard<std::mutex> sensorLock(sensorMutex_);
     CHKPR(iSensorHdiConnection_, SET_SENSOR_CONFIG_ERR);
     ret = iSensorHdiConnection_->SetBatch(sensorDesc, samplingInterval, reportInterval);
 #ifdef HIVIEWDFX_HITRACE_ENABLE
@@ -413,6 +424,7 @@ int32_t SensorHdiConnection::SetMode(const SensorDescription &sensorDesc, int32_
         return ret;
     }
 #endif // BUILD_VARIANT_ENG
+    std::lock_guard<std::mutex> sensorLock(sensorMutex_);
     CHKPR(iSensorHdiConnection_, SET_SENSOR_MODE_ERR);
     ret = iSensorHdiConnection_->SetMode(sensorDesc, mode);
 #ifdef HIVIEWDFX_HITRACE_ENABLE
@@ -431,6 +443,7 @@ int32_t SensorHdiConnection::RegisterDataReport(ReportDataCb cb, sptr<ReportData
 #ifdef HIVIEWDFX_HITRACE_ENABLE
     StartTrace(HITRACE_TAG_SENSORS, "RegisterDataReport");
 #endif // HIVIEWDFX_HITRACE_ENABLE
+    std::lock_guard<std::mutex> sensorLock(sensorMutex_);
     CHKPR(iSensorHdiConnection_, REGIST_CALLBACK_ERR);
     int32_t ret = iSensorHdiConnection_->RegisterDataReport(cb, reportDataCallback);
     if (ret != ERR_OK) {
@@ -454,6 +467,7 @@ int32_t SensorHdiConnection::RegisterDataReport(ReportDataCb cb, sptr<ReportData
 
 int32_t SensorHdiConnection::DestroyHdiConnection()
 {
+    std::lock_guard<std::mutex> sensorLock(sensorMutex_);
     CHKPR(iSensorHdiConnection_, DEVICE_ERR);
     int32_t ret = iSensorHdiConnection_->DestroyHdiConnection();
     if (ret != ERR_OK) {
@@ -496,8 +510,8 @@ void SensorHdiConnection::UpdateSensorList(std::vector<Sensor> &singleDevSensors
 int32_t SensorHdiConnection::GetSensorListByDevice(int32_t deviceId, std::vector<Sensor> &singleDevSensors)
 {
     CALL_LOG_ENTER;
-    CHKPR(iSensorHdiConnection_, GET_SENSOR_LIST_ERR);
     std::lock_guard<std::mutex> sensorLock(sensorMutex_);
+    CHKPR(iSensorHdiConnection_, GET_SENSOR_LIST_ERR);
     if (iSensorHdiConnection_->GetSensorListByDevice(deviceId, singleDevSensors) != ERR_OK) {
         SEN_HILOGW("Get sensor list by device failed");
     }
@@ -540,6 +554,7 @@ int32_t SensorHdiConnection::RegSensorPlugCallback(DevicePlugCallback cb)
 #ifdef HIVIEWDFX_HITRACE_ENABLE
     StartTrace(HITRACE_TAG_SENSORS, "RegSensorPlugCallback");
 #endif // HIVIEWDFX_HITRACE_ENABLE
+    std::lock_guard<std::mutex> sensorLock(sensorMutex_);
     CHKPR(iSensorHdiConnection_, REGIST_CALLBACK_ERR);
     int32_t ret = iSensorHdiConnection_->RegSensorPlugCallback(cb);
     if (ret != ERR_OK) {

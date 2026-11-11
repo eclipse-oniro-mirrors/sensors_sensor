@@ -17,6 +17,7 @@
 #define STREAM_SESSION_H
 
 #include <map>
+#include <mutex>
 
 #include "accesstoken_kit.h"
 
@@ -54,6 +55,7 @@ protected:
     std::map<int32_t, std::vector<EventTime>> events_;
     std::string descript_;
     const std::string programName_;
+    mutable std::mutex fdMutex_;
     int32_t fd_ { -1 };
     const int32_t uid_ { -1 };
     const int32_t pid_ { -1 };

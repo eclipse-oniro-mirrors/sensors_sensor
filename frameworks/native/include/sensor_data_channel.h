@@ -34,8 +34,8 @@ public:
     int32_t CreateSensorDataChannel(DataChannelCB callBack, void *data);
     int32_t DestroySensorDataChannel();
     int32_t RestoreSensorDataChannel();
-    DataChannelCB dataCB_ = nullptr;
-    void *privateData_ = nullptr;
+    DataChannelCB GetDataCB() const;
+    void *GetData() const;
     int32_t AddFdListener(int32_t fd, ReceiveMessageFun receiveMessage, DisconnectFun disconnect);
     int32_t DelFdListener(int32_t fd);
     ReceiveMessageFun GetReceiveMessageFun() const;
@@ -43,9 +43,11 @@ public:
 
 private:
     int32_t InnerSensorDataChannel();
-    std::mutex eventRunnerMutex_;
+    mutable std::mutex eventRunnerMutex_;
     std::shared_ptr<SensorEventHandler> eventHandler_ = nullptr;
     std::unordered_set<int32_t> listenedFdSet_;
+    DataChannelCB dataCB_ = nullptr;
+    void *privateData_ = nullptr;
     ReceiveMessageFun receiveMessage_;
     DisconnectFun disconnect_;
 };

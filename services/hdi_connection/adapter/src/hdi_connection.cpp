@@ -393,6 +393,7 @@ int32_t HdiConnection::RegSensorPlugCallback(DevicePlugCallback cb)
 
 DevicePlugCallback HdiConnection::GetSensorPlugCb()
 {
+    std::lock_guard<std::mutex> sensorInterfaceLock(g_sensorInterfaceMutex);
     if (reportPlugDataCb_ == nullptr) {
         SEN_HILOGE("reportPlugDataCb_ cannot be null");
     }
@@ -401,6 +402,7 @@ DevicePlugCallback HdiConnection::GetSensorPlugCb()
 
 ReportDataCb HdiConnection::GetReportDataCb()
 {
+    std::lock_guard<std::mutex> sensorInterfaceLock(g_sensorInterfaceMutex);
     if (reportDataCb_ == nullptr) {
         SEN_HILOGE("reportDataCb_ cannot be null");
     }
@@ -409,6 +411,7 @@ ReportDataCb HdiConnection::GetReportDataCb()
 
 sptr<ReportDataCallback> HdiConnection::GetReportDataCallback()
 {
+    std::lock_guard<std::mutex> sensorInterfaceLock(g_sensorInterfaceMutex);
     if (reportDataCallback_ == nullptr) {
         SEN_HILOGE("reportDataCallback_ cannot be null");
     }
@@ -497,6 +500,7 @@ void HdiConnection::ProcessDeathObserver(const wptr<IRemoteObject> &object)
 
 void HdiConnection::ReEnableSensor()
 {
+    std::lock_guard<std::mutex> sensorInterfaceLock(g_sensorInterfaceMutex);
     std::lock_guard<std::mutex> sensorInfoLock(g_sensorBasicInfoMutex);
     CHKPV(g_sensorInterface);
     for (const auto &sensorInfo: g_sensorBasicInfoMap) {
@@ -564,7 +568,6 @@ void HdiConnection::Reconnect()
         SEN_HILOGE("Get sensor list fail");
         return;
     }
-    std::lock_guard<std::mutex> sensorInterfaceLock(g_sensorInterfaceMutex);
     ReEnableSensor();
 }
 

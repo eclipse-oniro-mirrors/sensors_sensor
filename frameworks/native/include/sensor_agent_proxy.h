@@ -76,8 +76,8 @@ private:
     static std::mutex chanelMutex_;
     OHOS::sptr<OHOS::Sensors::SensorDataChannel> dataChannel_ = nullptr;
     std::atomic_bool isChannelCreated_ = false;
-    int64_t samplingInterval_ = -1;
-    int64_t reportInterval_ = -1;
+    std::atomic_int64_t samplingInterval_ = -1;
+    std::atomic_int64_t reportInterval_ = -1;
     std::map<SensorDescription, std::set<const SensorUser *>> subscribeMap_;
     std::map<SensorDescription, std::set<const SensorUser *>> unsubscribeMap_;
     std::set<const SensorUser *> subscribeSet_;

@@ -91,14 +91,21 @@ SensorEvent g_proximityEvent = {
 };
 } // namespace
 std::vector<int32_t> HdiServiceImpl::enableSensors_;
+std::mutex HdiServiceImpl::enableSensorsMutex_;
 std::vector<RecordSensorCallback> HdiServiceImpl::callbacks_;
+std::mutex HdiServiceImpl::callbacksMutex_;
 int64_t HdiServiceImpl::samplingInterval_ = -1;
 int64_t HdiServiceImpl::reportInterval_ = -1;
 std::atomic_bool HdiServiceImpl::isStop_ = false;
 
 void HdiServiceImpl::GenerateEvent()
 {
-    for (const auto &sensorType : enableSensors_) {
+    std::vector<int32_t> copyEnableSensors;
+    {
+        std::lock_guard<std::mutex> enableSensorsLock(enableSensorsMutex_);
+        copyEnableSensors = enableSensors_;
+    }
+    for (const auto &sensorType : copyEnableSensors) {
         switch (sensorType) {
             case SENSOR_TYPE_ID_ACCELEROMETER:
                 GenerateAccelerometerEvent();
@@ -218,17 +225,26 @@ int32_t HdiServiceImpl::GetSensorListByDevice(int32_t deviceId, std::vector<Sens
 
 void HdiServiceImpl::DataReportThread()
 {
-    CALL_LOG_ENTER;
     prctl(PR_SET_NAME, SENSOR_PRODUCE_THREAD_NAME.c_str());
     while (true) {
         GenerateEvent();
         std::this_thread::sleep_for(std::chrono::nanoseconds(samplingInterval_));
-        for (const auto &it : callbacks_) {
+        std::vector<RecordSensorCallback> copycallbacks;
+        {
+            std::lock_guard<std::mutex> callbacksLock(callbacksMutex_);
+            copycallbacks = callbacks_;
+        }
+        std::vector<int32_t> copyEnableSensors;
+        {
+            std::lock_guard<std::mutex> enableSensorsLock(enableSensorsMutex_);
+            copyEnableSensors = enableSensors_;
+        }
+        for (const auto &it : copycallbacks) {
             if (it == nullptr) {
                 SEN_HILOGW("RecordSensorCallback is null");
                 continue;
             }
-            for (const auto &sensorType : enableSensors_) {
+            for (const auto &sensorType : copyEnableSensors) {
                 switch (sensorType) {
                     case SENSOR_TYPE_ID_ACCELEROMETER:
                         it(&g_accEvent);
@@ -266,11 +282,14 @@ int32_t HdiServiceImpl::EnableSensor(const SensorDescription &sensorDesc)
         SEN_HILOGE("Not support enable sensorType:%{public}d", sensorDesc.sensorType);
         return ERR_NO_INIT;
     }
-    if (std::find(enableSensors_.begin(), enableSensors_.end(), sensorDesc.sensorType) != enableSensors_.end()) {
-        SEN_HILOGI("sensorType:%{public}d has been enabled", sensorDesc.sensorType);
-        return ERR_OK;
+    {
+        std::lock_guard<std::mutex> enableSensorsLock(enableSensorsMutex_);
+        if (std::find(enableSensors_.begin(), enableSensors_.end(), sensorDesc.sensorType) != enableSensors_.end()) {
+            SEN_HILOGI("sensorType:%{public}d has been enabled", sensorDesc.sensorType);
+            return ERR_OK;
+        }
+        enableSensors_.push_back(sensorDesc.sensorType);
     }
-    enableSensors_.push_back(sensorDesc.sensorType);
     if (!dataReportThread_.joinable() || isStop_) {
         if (dataReportThread_.joinable()) {
             dataReportThread_.join();
@@ -290,21 +309,24 @@ int32_t HdiServiceImpl::DisableSensor(const SensorDescription &sensorDesc)
             sensorDesc.deviceId, sensorDesc.sensorType, sensorDesc.sensorId);
         return ERR_NO_INIT;
     }
-    if (std::find(enableSensors_.begin(), enableSensors_.end(), sensorDesc.sensorType) == enableSensors_.end()) {
-        SEN_HILOGE("sensorType:%{public}d should be enable first", sensorDesc.sensorType);
-        return ERR_NO_INIT;
-    }
-    std::vector<int32_t>::iterator iter;
-    for (iter = enableSensors_.begin(); iter != enableSensors_.end();) {
-        if (*iter == sensorDesc.sensorType) {
-            iter = enableSensors_.erase(iter);
-            break;
-        } else {
-            ++iter;
+    {
+        std::lock_guard<std::mutex> enableSensorsLock(enableSensorsMutex_);
+        if (std::find(enableSensors_.begin(), enableSensors_.end(), sensorDesc.sensorType) == enableSensors_.end()) {
+            SEN_HILOGE("sensorType:%{public}d should be enable first", sensorDesc.sensorType);
+            return ERR_NO_INIT;
         }
-    }
-    if (enableSensors_.empty()) {
-        isStop_ = true;
+        std::vector<int32_t>::iterator iter;
+        for (iter = enableSensors_.begin(); iter != enableSensors_.end();) {
+            if (*iter == sensorDesc.sensorType) {
+                iter = enableSensors_.erase(iter);
+                break;
+            } else {
+                ++iter;
+            }
+        }
+        if (enableSensors_.empty()) {
+            isStop_ = true;
+        }
     }
     return ERR_OK;
 }
@@ -329,6 +351,7 @@ int32_t HdiServiceImpl::SetMode(const SensorDescription &sensorDesc, int32_t mod
 int32_t HdiServiceImpl::Register(RecordSensorCallback cb)
 {
     CHKPR(cb, ERROR);
+    std::lock_guard<std::mutex> callbacksLock(callbacksMutex_);
     callbacks_.push_back(cb);
     return ERR_OK;
 }

@@ -97,6 +97,7 @@ bool SensorManager::ResetBestSensorParams(const SensorDescription &sensorDesc)
 void SensorManager::StartDataReportThread()
 {
     CALL_LOG_ENTER;
+    std::lock_guard<std::mutex> dataThreadLock(dataThreadMutex_);
     if (!dataThread_.joinable()) {
         SEN_HILOGW("dataThread_ started");
         std::thread dataProcessThread(SensorDataProcesser::DataThread, sensorDataProcesser_, reportDataCallback_);

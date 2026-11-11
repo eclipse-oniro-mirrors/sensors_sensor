@@ -36,6 +36,7 @@ void CleanCallbackInfo(napi_env env, std::map<SensorDescription, std::vector<spt
 void CleanOnCallbackInfo(napi_env env);
 void CleanOnceCallbackInfo(napi_env env);
 void CleanSubscribeCallbackInfo(napi_env env);
+void CleanPlugCallbackInfo(napi_env env);
 void CleanUp(void *data);
 } // namespace Sensors
 } // namespace OHOS

@@ -92,7 +92,6 @@ private:
     };
 
     void RegisterClientDeathRecipient(sptr<IRemoteObject> sensorClient, int32_t pid);
-    void UnregisterClientDeathRecipient(sptr<IRemoteObject> sensorClient);
     bool InitSensorPolicy();
     void ReportOnChangeData(const SensorDescription &sensorDesc);
     ErrCode DisableSensor(const SensorDescription &sensorDesc, int32_t pid);

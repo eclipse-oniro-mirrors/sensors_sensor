@@ -84,7 +84,6 @@ bool RegisterClientDeathRecipientFuzzTest(const uint8_t *data, size_t size)
     int32_t pid = 0;
     GetObject<int32_t>(pid, data, size);
     g_service->RegisterClientDeathRecipient(g_remote, pid);
-    g_service->UnregisterClientDeathRecipient(g_remote);
     return true;
 }
 } // namespace Sensors

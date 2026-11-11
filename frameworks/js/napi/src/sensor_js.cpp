@@ -259,10 +259,16 @@ void CleanCallbackInfo(napi_env env, std::map<SensorDescription, std::vector<spt
 {
     for (auto &event : callbackInfo) {
         auto &vecCallbackInfo = event.second;
-        // Automatically call the destructor of the AsyncCallbackInfo
+        // Automatically call the destructor of the AsyncCallbackInfo.
+        // Mark the removed entries first: their owner env is going away, so tasks
+        // still queued in the uv loop must bail out before touching any napi API.
         vecCallbackInfo.erase(std::remove_if(vecCallbackInfo.begin(), vecCallbackInfo.end(),
             [&env](const sptr<AsyncCallbackInfo> &myCallbackInfo) {
-                return env == myCallbackInfo->env;
+                if (env != myCallbackInfo->env) {
+                    return false;
+                }
+                myCallbackInfo->isEnvInvalid_.store(true);
+                return true;
             }), vecCallbackInfo.end());
     }
 }
@@ -285,12 +291,26 @@ void CleanSubscribeCallbackInfo(napi_env env)
     CleanCallbackInfo(env, g_subscribeCallbacks);
 }
 
+void CleanPlugCallbackInfo(napi_env env)
+{
+    std::lock_guard<std::mutex> plugCallbackLock(g_plugMutex);
+    g_plugCallbackInfo.erase(std::remove_if(g_plugCallbackInfo.begin(), g_plugCallbackInfo.end(),
+        [&env](const sptr<AsyncCallbackInfo> &myCallbackInfo) {
+            if (env != myCallbackInfo->env) {
+                return false;
+            }
+            myCallbackInfo->isEnvInvalid_.store(true);
+            return true;
+        }), g_plugCallbackInfo.end());
+}
+
 void CleanUp(void *data)
 {
     auto env = *(reinterpret_cast<napi_env*>(data));
     CleanOnCallbackInfo(env);
     CleanOnceCallbackInfo(env);
     CleanSubscribeCallbackInfo(env);
+    CleanPlugCallbackInfo(env);
     delete reinterpret_cast<napi_env*>(data);
     data = nullptr;
 }

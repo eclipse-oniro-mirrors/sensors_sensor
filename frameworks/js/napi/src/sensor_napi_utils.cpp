@@ -491,6 +491,11 @@ bool CreateNapiArray(const napi_env &env, float data[], int32_t dataLength, napi
 void ReleaseCallback(sptr<AsyncCallbackInfo> asyncCallbackInfo)
 {
     CHKPV(asyncCallbackInfo);
+    // The owner env is gone: the engine reclaims the refs during env teardown, so
+    // queueing the deletion event on the dead env would abort the process.
+    if (asyncCallbackInfo->isEnvInvalid_.load()) {
+        return;
+    }
     if (asyncCallbackInfo->type == ONCE_CALLBACK) {
         napi_env env = asyncCallbackInfo->env;
         CHKPV(env);
@@ -584,6 +589,11 @@ void EmitUvEventLoop(sptr<AsyncCallbackInfo> asyncCallbackInfo, std::shared_ptr<
          * count of the smart pointer is guaranteed to be 1.
          */
         asyncCallbackInfo->DecStrongRef(nullptr);
+        // The owner env was destroyed while this task was queued in the uv loop: bail
+        // out before touching any napi API, otherwise ValidEngineCheck aborts.
+        if (asyncCallbackInfo->isEnvInvalid_.load()) {
+            return;
+        }
         napi_handle_scope scope = nullptr;
         napi_open_handle_scope(asyncCallbackInfo->env, &scope);
         if (scope == nullptr) {

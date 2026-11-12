@@ -491,6 +491,11 @@ bool CreateNapiArray(const napi_env &env, float data[], int32_t dataLength, napi
 void ReleaseCallback(sptr<AsyncCallbackInfo> asyncCallbackInfo)
 {
     CHKPV(asyncCallbackInfo);
+    // The owner env is gone: the engine reclaims the refs during env teardown, so
+    // queueing the deletion event on the dead env would abort the process.
+    if (asyncCallbackInfo->isEnvInvalid_.load()) {
+        return;
+    }
     if (asyncCallbackInfo->type == ONCE_CALLBACK) {
         napi_env env = asyncCallbackInfo->env;
         CHKPV(env);
@@ -568,6 +573,104 @@ void DeleteWork(uv_work_t *work)
     work = nullptr;
 }
 
+namespace {
+// Closes the napi handle scope on every exit path of the data callback emission, so no
+// error branch has to repeat the cleanup sequence by hand.
+class NapiHandleScopeGuard {
+public:
+    explicit NapiHandleScopeGuard(napi_env env) : env_(env)
+    {
+        napi_open_handle_scope(env_, &scope_);
+    }
+
+    ~NapiHandleScopeGuard()
+    {
+        if (scope_ != nullptr) {
+            napi_close_handle_scope(env_, scope_);
+        }
+    }
+
+    bool IsValid() const
+    {
+        return scope_ != nullptr;
+    }
+
+private:
+    NapiHandleScopeGuard(const NapiHandleScopeGuard &) = delete;
+    NapiHandleScopeGuard &operator=(const NapiHandleScopeGuard &) = delete;
+
+    napi_env env_ = nullptr;
+    napi_handle_scope scope_ = nullptr;
+};
+
+// Creates the JS arguments for the data callback according to the callback type.
+bool CreateDataCallbackResult(napi_env env, const sptr<AsyncCallbackInfo> &asyncCallbackInfo,
+    const std::shared_ptr<CallbackSensorData> &cb, napi_value result[2])
+{
+    if (asyncCallbackInfo->type == ON_CALLBACK || asyncCallbackInfo->type == ONCE_CALLBACK ||
+        asyncCallbackInfo->type == SUBSCRIBE_CALLBACK) {
+        if (!ConvertToSensorData(env, asyncCallbackInfo, result, RESULT_SIZE, cb)) {
+            SEN_HILOGE("ConvertToSensorData fail");
+            return false;
+        }
+        return true;
+    }
+    if (g_convertfuncList.find(asyncCallbackInfo->type) == g_convertfuncList.end()) {
+        SEN_HILOGE("asyncCallbackInfo type is invalid");
+        napi_throw_error(env, nullptr, "asyncCallbackInfo type is invalid");
+        return false;
+    }
+    g_convertfuncList[asyncCallbackInfo->type](env, asyncCallbackInfo, result);
+    return true;
+}
+
+// Runs on the uv loop of the env which owns the callback and emits one sensor data event.
+void EmitDataCallback(AsyncCallbackInfo *event, const std::shared_ptr<CallbackSensorData> &cb)
+{
+    sptr<AsyncCallbackInfo> asyncCallbackInfo(event);
+    /**
+     * After the asynchronous task is created, the asyncCallbackInfo reference count is reduced
+     * to 0 destruction, so you need to add 1 to the asyncCallbackInfo reference count when the
+     * asynchronous task is created, and subtract 1 from the reference count after the naked
+     * pointer is converted to a pointer when the asynchronous task is executed, the reference
+     * count of the smart pointer is guaranteed to be 1.
+     */
+    asyncCallbackInfo->DecStrongRef(nullptr);
+    // The owner env was destroyed while this task was queued in the uv loop: bail
+    // out before touching any napi API, otherwise ValidEngineCheck aborts.
+    if (asyncCallbackInfo->isEnvInvalid_.load()) {
+        return;
+    }
+    NapiHandleScopeGuard scopeGuard(asyncCallbackInfo->env);
+    if (!scopeGuard.IsValid()) {
+        SEN_HILOGE("napi_handle_scope is nullptr");
+        ReleaseCallback(asyncCallbackInfo);
+        return;
+    }
+    napi_env env = asyncCallbackInfo->env;
+    napi_value callback = nullptr;
+    if (napi_get_reference_value(env, asyncCallbackInfo->callback[0], &callback) != napi_ok) {
+        SEN_HILOGE("napi_get_reference_value fail");
+        napi_throw_error(env, nullptr, "napi_get_reference_value fail");
+        ReleaseCallback(asyncCallbackInfo);
+        return;
+    }
+    napi_value callResult = nullptr;
+    napi_value result[2] = {0};
+    if (!CreateDataCallbackResult(env, asyncCallbackInfo, cb, result)) {
+        ReleaseCallback(asyncCallbackInfo);
+        return;
+    }
+    if (napi_call_function(env, nullptr, callback, 1, &result[1], &callResult) != napi_ok) {
+        SEN_HILOGE("napi_call_function callback fail");
+        napi_throw_error(env, nullptr, "napi_call_function callback fail");
+        ReleaseCallback(asyncCallbackInfo);
+        return;
+    }
+    ReleaseCallback(asyncCallbackInfo);
+}
+} // namespace
+
 void EmitUvEventLoop(sptr<AsyncCallbackInfo> asyncCallbackInfo, std::shared_ptr<CallbackSensorData> cb)
 {
     CHKPV(asyncCallbackInfo);
@@ -575,60 +678,7 @@ void EmitUvEventLoop(sptr<AsyncCallbackInfo> asyncCallbackInfo, std::shared_ptr<
     asyncCallbackInfo->IncStrongRef(nullptr);
     auto event = asyncCallbackInfo.GetRefPtr();
     auto task = [event, cb]() {
-        sptr<AsyncCallbackInfo> asyncCallbackInfo(static_cast<AsyncCallbackInfo *>(event));
-        /**
-         * After the asynchronous task is created, the asyncCallbackInfo reference count is reduced
-         * to 0 destruction, so you need to add 1 to the asyncCallbackInfo reference count when the
-         * asynchronous task is created, and subtract 1 from the reference count after the naked
-         * pointer is converted to a pointer when the asynchronous task is executed, the reference
-         * count of the smart pointer is guaranteed to be 1.
-         */
-        asyncCallbackInfo->DecStrongRef(nullptr);
-        napi_handle_scope scope = nullptr;
-        napi_open_handle_scope(asyncCallbackInfo->env, &scope);
-        if (scope == nullptr) {
-            SEN_HILOGE("napi_handle_scope is nullptr");
-            ReleaseCallback(asyncCallbackInfo);
-            return;
-        }
-        napi_env env = asyncCallbackInfo->env;
-        napi_value callback = nullptr;
-        if (napi_get_reference_value(env, asyncCallbackInfo->callback[0], &callback) != napi_ok) {
-            SEN_HILOGE("napi_get_reference_value fail");
-            napi_throw_error(env, nullptr, "napi_get_reference_value fail");
-            ReleaseCallback(asyncCallbackInfo);
-            napi_close_handle_scope(asyncCallbackInfo->env, scope);
-            return;
-        }
-        napi_value callResult = nullptr;
-        napi_value result[2] = {0};
-        if (asyncCallbackInfo->type == ON_CALLBACK || asyncCallbackInfo->type == ONCE_CALLBACK ||
-            asyncCallbackInfo->type == SUBSCRIBE_CALLBACK) {
-            if (!ConvertToSensorData(env, asyncCallbackInfo, result, sizeof(result) / sizeof(result[0]), cb)) {
-                SEN_HILOGE("ConvertToSensorData fail");
-                ReleaseCallback(asyncCallbackInfo);
-                napi_close_handle_scope(asyncCallbackInfo->env, scope);
-                return;
-            }
-        } else {
-            if (!(g_convertfuncList.find(asyncCallbackInfo->type) != g_convertfuncList.end())) {
-                SEN_HILOGE("asyncCallbackInfo type is invalid");
-                napi_throw_error(env, nullptr, "asyncCallbackInfo type is invalid");
-                ReleaseCallback(asyncCallbackInfo);
-                napi_close_handle_scope(asyncCallbackInfo->env, scope);
-                return;
-            }
-            g_convertfuncList[asyncCallbackInfo->type](env, asyncCallbackInfo, result);
-        }
-        if (napi_call_function(env, nullptr, callback, 1, &result[1], &callResult) != napi_ok) {
-            SEN_HILOGE("napi_call_function callback fail");
-            napi_throw_error(env, nullptr, "napi_call_function callback fail");
-            ReleaseCallback(asyncCallbackInfo);
-            napi_close_handle_scope(asyncCallbackInfo->env, scope);
-            return;
-        }
-        ReleaseCallback(asyncCallbackInfo);
-        napi_close_handle_scope(asyncCallbackInfo->env, scope);
+        EmitDataCallback(event, cb);
     };
     auto ret = napi_send_event(asyncCallbackInfo->env, task, napi_eprio_immediate, "sensor EmitUvEventLoop");
     if (ret != napi_ok) {

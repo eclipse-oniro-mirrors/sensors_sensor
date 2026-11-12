@@ -923,7 +923,9 @@ ErrCode SensorService::DestroySensorChannel(const sptr<IRemoteObject> &sensorCli
         return DESTROY_SENSOR_CHANNEL_ERR;
     } // LCOV_EXCL_STOP
     clientInfo_.DestroyCmd(GetCallingUid());
-    UnregisterClientDeathRecipient(sensorClient);
+    // The death recipient is intentionally kept: its lifetime now equals the client
+    // process lifetime, so SensorService::ProcessDeathObserver still runs when the
+    // client process dies and reclaims every record kept for it (e.g. sensorClients_).
     return ERR_OK;
 }
 
@@ -935,6 +937,9 @@ void SensorService::ProcessDeathObserver(const wptr<IRemoteObject> &object)
     int32_t pid = clientInfo_.FindClientPid(client);
     if (pid == INVALID_PID) { // LCOV_EXCL_START
         SEN_HILOGE("pid is invalid");
+        // The client may have transferred its remote object without creating a data
+        // channel; it is still in the sensorClients_ broadcast list, so clean it up.
+        clientInfo_.DestroySensorClient(client);
         return;
     } // LCOV_EXCL_STOP
     POWER_POLICY.DeleteDeathPidSensorInfo(pid);
@@ -953,6 +958,9 @@ void SensorService::ProcessDeathObserver(const wptr<IRemoteObject> &object)
     clientInfo_.DelActiveInfoCBPid(pid);
     clientInfo_.DestroySensorChannel(pid);
     clientInfo_.DestroyClientPid(client);
+    // The client stays in the sensorClients_ broadcast list for its whole process
+    // lifetime; remove it here as the last-resort cleanup.
+    clientInfo_.DestroySensorClient(client);
     clientInfo_.DestroyCmd(clientInfo_.GetUidByPid(pid));
 }
 
@@ -960,6 +968,12 @@ void SensorService::RegisterClientDeathRecipient(sptr<IRemoteObject> sensorClien
 {
     CALL_LOG_ENTER;
     CHKPV(sensorClient);
+    // Idempotent: the client may already be registered when it transferred its remote
+    // object first; AddDeathRecipient ignores duplicates, so skip directly.
+    if (clientInfo_.FindClientPid(sensorClient) != INVALID_PID) {
+        SEN_HILOGD("Client death recipient already registered, pid:%{public}d", pid);
+        return;
+    }
     std::lock_guard<std::mutex> clientDeathObserverLock(clientDeathObserverMutex_);
     if (clientDeathObserver_ == nullptr) {
         clientDeathObserver_ = new (std::nothrow) DeathRecipientTemplate(*const_cast<SensorService *>(this));
@@ -967,24 +981,6 @@ void SensorService::RegisterClientDeathRecipient(sptr<IRemoteObject> sensorClien
     }
     sensorClient->AddDeathRecipient(clientDeathObserver_);
     clientInfo_.SaveClientPid(sensorClient, pid);
-}
-
-void SensorService::UnregisterClientDeathRecipient(sptr<IRemoteObject> sensorClient)
-{
-    CALL_LOG_ENTER;
-    CHKPV(sensorClient);
-    int32_t pid = clientInfo_.FindClientPid(sensorClient);
-    if (pid == INVALID_PID) {
-        SEN_HILOGE("Pid is invalid");
-        return;
-    }
-    if (!clientInfo_.CallingService(pid)) {
-        SEN_HILOGD("Can't unregister client death recipient"); // LCOV_EXCL_START
-        return;
-    } // LCOV_EXCL_STOP
-    std::lock_guard<std::mutex> clientDeathObserverLock(clientDeathObserverMutex_);
-    sensorClient->RemoveDeathRecipient(clientDeathObserver_);
-    clientInfo_.DestroyClientPid(sensorClient);
 }
 
 int32_t SensorService::Dump(int32_t fd, const std::vector<std::u16string> &args)
@@ -1103,7 +1099,8 @@ ErrCode SensorService::DestroySocketChannel(const sptr<IRemoteObject> &sensorCli
         return PERMISSION_DENIED;
     } // LCOV_EXCL_STOP
     DelSession(GetCallingPid());
-    UnregisterClientDeathRecipient(sensorClient);
+    // Keep the death recipient registered: it must stay alive for the whole client
+    // process lifetime so ProcessDeathObserver can clean up this client's records.
     return ERR_OK;
 }
 
@@ -1223,6 +1220,10 @@ ErrCode SensorService::SetDeviceStatus(uint32_t deviceStatus)
 ErrCode SensorService::TransferClientRemoteObject(const sptr<IRemoteObject> &sensorClient)
 {
     CALL_LOG_ENTER;
+    // Register the death recipient before saving the client: a client which only
+    // transferred its remote object without creating a data channel yet must also be
+    // removed from the sensorClients_ broadcast list when it dies.
+    RegisterClientDeathRecipient(sensorClient, GetCallingPid());
     clientInfo_.SaveSensorClient(sensorClient);
     return ERR_OK;
 }

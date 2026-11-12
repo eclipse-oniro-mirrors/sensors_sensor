@@ -39,13 +39,18 @@ constexpr int32_t LOADSA_TIMEOUT_MS = 10000;
 
 SensorServiceClient::~SensorServiceClient()
 {
+    // This destructor may run during process exit (atexit) while ProcessDeathObserver
+    // is handling the sensor service death notification on an IPC thread. Any
+    // synchronous IPC here would race with it on sensorServer_'s reference count
+    // (heap-use-after-free), so only local cleanup is allowed. The records kept by
+    // the service side are reclaimed by SensorService::ProcessDeathObserver when
+    // the client process dies.
     if (sensorServer_ != nullptr && serviceDeathObserver_ != nullptr) {
         auto remoteObject = sensorServer_->AsObject();
         if (remoteObject != nullptr) {
             remoteObject->RemoveDeathRecipient(serviceDeathObserver_);
         }
     }
-    DestroyClientRemoteObject();
     Disconnect();
 }
 

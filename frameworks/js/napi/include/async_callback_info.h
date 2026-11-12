@@ -14,6 +14,7 @@
  */
 #ifndef ASYNC_CALLBACK_INFO_H
 #define ASYNC_CALLBACK_INFO_H
+#include <atomic>
 #include <uv.h>
 
 #include "napi/native_api.h"
@@ -103,6 +104,10 @@ struct BusinessError {
 class AsyncCallbackInfo : public RefBase {
 public:
     napi_env env = nullptr;
+    // Set by the env cleanup hook before the owning env is destroyed, so tasks still
+    // queued in the uv loop and the destructor can bail out instead of touching napi
+    // APIs on a dead env, which aborts the process in ValidEngineCheck.
+    std::atomic<bool> isEnvInvalid_ { false };
     napi_async_work asyncWork = nullptr;
     uv_work_t *work = nullptr;
     napi_deferred deferred = nullptr;
@@ -117,6 +122,13 @@ public:
     {
         CALL_LOG_ENTER;
         if (type == ONCE_CALLBACK) {
+            return;
+        }
+        // The owning env is gone: the engine reclaims all refs and async works during
+        // env teardown, so there is nothing left to release here, and queueing cleanup
+        // events on the dead env would abort the process.
+        if (isEnvInvalid_.load()) {
+            SEN_HILOGD("Env is invalid, skip releasing napi resources");
             return;
         }
         DeleteAsyncWork();

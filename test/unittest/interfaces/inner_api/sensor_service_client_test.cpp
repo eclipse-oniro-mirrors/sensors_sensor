@@ -125,6 +125,38 @@ HWTEST_F(SensorServiceClientTest, LoadSensorServiceTest_001, TestSize.Level1)
     EXPECT_EQ(ret, ERR_OK);
 }
 
+/**
+ * @tc.name: SensorServiceClientDestructor_001
+ * @tc.desc: Destroying a client which never connected only runs the null branch of
+ *           the local destructor cleanup
+ * @tc.type: FUNC
+ */
+HWTEST_F(SensorServiceClientTest, SensorServiceClientDestructor_001, TestSize.Level1)
+{
+    SEN_HILOGI("SensorServiceClientDestructor_001 in");
+    sensorServiceClient->sensorServer_ = nullptr;
+    delete sensorServiceClient;
+    sensorServiceClient = nullptr;
+}
+
+/**
+ * @tc.name: SensorServiceClientDestructor_002
+ * @tc.desc: Destroying a connected client runs only local cleanup (RemoveDeathRecipient
+ *           and Disconnect), without any synchronous IPC to the service
+ * @tc.type: FUNC
+ */
+HWTEST_F(SensorServiceClientTest, SensorServiceClientDestructor_002, TestSize.Level1)
+{
+    SEN_HILOGI("SensorServiceClientDestructor_002 in");
+    sensorServiceClient->sensorServer_ = nullptr;
+    int32_t ret = sensorServiceClient->InitServiceClient();
+    EXPECT_EQ(ret, ERR_OK);
+    // The full connect path registered the service death observer.
+    EXPECT_NE(sensorServiceClient->serviceDeathObserver_, nullptr);
+    delete sensorServiceClient;
+    sensorServiceClient = nullptr;
+}
+
 HWTEST_F(SensorServiceClientTest, GetSensorListByDeviceTest_001, TestSize.Level1)
 {
     SEN_HILOGI("GetSensorListByDeviceTest_001 in");

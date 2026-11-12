@@ -34,6 +34,10 @@ constexpr int32_t DATA_LENGTH = 16;
 constexpr int32_t DEFAULT_DEVICE_ID = -1;
 constexpr int32_t DEFAULT_SENSOR_ID = 0;
 constexpr int32_t IS_LOCAL_DEVICE = 1;
+// Same WMM2020 base time as GeomagneticField; clamping timeMillis to this lower bound
+// avoids int64 subtraction underflow inside GeomagneticField with extreme input.
+constexpr int64_t WMM_BASE_TIME_MILLIS = 1580486400000;
+constexpr int64_t MIN_TIME_MILLIS = INT64_MIN + WMM_BASE_TIME_MILLIS;
 } // namespace
 
 CJSensorImpl::CJSensorImpl() {}
@@ -315,6 +319,10 @@ std::optional<SensorCallbackType> CJSensorImpl::FindCallback(SensorDescription s
 
 CGeomagneticData CJSensorImpl::GetGeomagneticInfo(CLocationOptions location, int64_t timeMillis)
 {
+    if (timeMillis < MIN_TIME_MILLIS) {
+        SEN_HILOGE("Invalid timeMillis, clamp to lower bound");
+        timeMillis = MIN_TIME_MILLIS;
+    }
     GeomagneticField geomagneticField(location.latitude, location.longitude, location.altitude, timeMillis);
     CGeomagneticData res = {
         .x = geomagneticField.ObtainX(),

@@ -605,8 +605,9 @@ private:
 
 // Creates the JS arguments for the data callback according to the callback type.
 bool CreateDataCallbackResult(napi_env env, const sptr<AsyncCallbackInfo> &asyncCallbackInfo,
-    const std::shared_ptr<CallbackSensorData> &cb, napi_value result[2])
+    const std::shared_ptr<CallbackSensorData> &cb, napi_value result[2], const size_t resultSize)
 {
+    CHKCF(!(resultSize < RESULT_SIZE), "result size Invalid");
     if (asyncCallbackInfo->type == ON_CALLBACK || asyncCallbackInfo->type == ONCE_CALLBACK ||
         asyncCallbackInfo->type == SUBSCRIBE_CALLBACK) {
         if (!ConvertToSensorData(env, asyncCallbackInfo, result, RESULT_SIZE, cb)) {
@@ -657,7 +658,7 @@ void EmitDataCallback(AsyncCallbackInfo *event, const std::shared_ptr<CallbackSe
     }
     napi_value callResult = nullptr;
     napi_value result[2] = {0};
-    if (!CreateDataCallbackResult(env, asyncCallbackInfo, cb, result)) {
+    if (!CreateDataCallbackResult(env, asyncCallbackInfo, cb, result, RESULT_SIZE)) {
         ReleaseCallback(asyncCallbackInfo);
         return;
     }

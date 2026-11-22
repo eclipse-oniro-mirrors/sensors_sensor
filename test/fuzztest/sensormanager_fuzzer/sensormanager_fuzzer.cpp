@@ -245,11 +245,15 @@ void InitSensorMapForTest(SensorManager &sensorMgr, const std::unordered_map<Sen
 void RunGetPackageNameTests(SensorManager &sensorMgr, uint32_t tokenIdVal)
 {
     std::string packageName;
-    sensorMgr.GetPackageName(tokenIdVal, packageName, true);
-    sensorMgr.GetPackageName(tokenIdVal, packageName, false);
-    sensorMgr.GetPackageName(0, packageName, true);
-    sensorMgr.GetPackageName(static_cast<AccessTokenID>(GetSelfTokenID()), packageName, true);
-    sensorMgr.GetPackageName(static_cast<AccessTokenID>(GetSelfTokenID()), packageName, false);
+    SensorManager::SetAccessTokenServiceActive(true);
+    sensorMgr.GetPackageName(tokenIdVal, packageName);
+    SensorManager::SetAccessTokenServiceActive(false);
+    sensorMgr.GetPackageName(tokenIdVal, packageName);
+    SensorManager::SetAccessTokenServiceActive(true);
+    sensorMgr.GetPackageName(0, packageName);
+    sensorMgr.GetPackageName(static_cast<AccessTokenID>(GetSelfTokenID()), packageName);
+    SensorManager::SetAccessTokenServiceActive(false);
+    sensorMgr.GetPackageName(static_cast<AccessTokenID>(GetSelfTokenID()), packageName);
 }
 
 void RunInitSensorMapTests(SensorManager &sensorMgr, const Sensor &sensor1,

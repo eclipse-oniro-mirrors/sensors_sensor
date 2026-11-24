@@ -29,6 +29,7 @@ copy_taihe_idl("copy_taihe") {
 ohos_taihe("run_taihe") {
   taihe_generated_file_path = "$taihe_generated_file_path"
   deps = [ ":copy_taihe" ]
+  use_ats = true
   outputs = [
     "$taihe_generated_file_path/src/ohos.sensor.abi.c",
     "$taihe_generated_file_path/src/ohos.sensor.ani.cpp",
@@ -78,7 +79,7 @@ taihe_shared_library("sensor_taihe_native") {
 generate_static_abc("sensor_abc") {
   base_url = "$taihe_generated_file_path"
   files = [
-    "$taihe_generated_file_path/@ohos.sensor.ets",
+    "$taihe_generated_file_path/@ohos.sensor.ats",
   ]
   is_boot_abc = "True"
   device_dst_file = "/system/framework/sensor_abc.abc"

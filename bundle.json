@@ -9,13 +9,17 @@
   "component": {
     "name": "sensor",
     "subsystem": "sensors",
-    "syscap": ["SystemCapability.Sensors.Sensor", "SystemCapability.Sensors.Sensor.Lite"],
-    "features": ["sensor_rust_socket_ipc"],
-    "adapted_system_type": [ "standard" ],
+    "syscap": [
+      "SystemCapability.Sensors.Sensor",
+      "SystemCapability.Sensors.Sensor.Lite"
+    ],
+    "adapted_system_type": [
+      "standard"
+    ],
     "rom": "2048KB",
     "ram": "~4096KB",
     "hisysevent_config": [
-        "//base/sensors/sensor/hisysevent.yaml"
+      "//base/sensors/sensor/hisysevent.yaml"
     ],
     "deps": {
       "components": [
@@ -62,7 +66,7 @@
           "//base/sensors/sensor/frameworks/ets/taihe:sensor_taihe",
           "//base/sensors/sensor/utils:sensor_utils_target"
         ],
-        "service_group": [ 
+        "service_group": [
           "//base/sensors/sensor/services:sensor_service_target",
           "//base/sensors/sensor/sa_profile:sensors_sa_profiles"
         ]
@@ -85,18 +89,27 @@
           "name": "//base/sensors/sensor/frameworks/cj:cj_sensor_ffi",
           "header": {
             "header_base": "//base/sensors/sensor/frameworks/cj/include",
-            "header_files":[]
+            "header_files": []
           }
         }
       ],
       "test": [
-          "//base/sensors/sensor/test/unittest/interfaces/js:unittest",
-          "//base/sensors/sensor/test/unittest/interfaces/kits:unittest",
-          "//base/sensors/sensor/test/fuzztest/interfaces:fuzztest",
-          "//base/sensors/sensor/test/unittest/interfaces/inner_api:unittest",
-          "//base/sensors/sensor/test/fuzztest/services:fuzztest",
-          "//base/sensors/sensor/test/unittest/coverage:unittest",
-          "//base/sensors/sensor/test/fuzztest/sensor_fuzzer:fuzztest"
+        "//base/sensors/sensor/test/unittest/interfaces/js:unittest",
+        "//base/sensors/sensor/test/unittest/interfaces/kits:unittest",
+        "//base/sensors/sensor/test/fuzztest/interfaces:fuzztest",
+        "//base/sensors/sensor/test/unittest/interfaces/inner_api:unittest",
+        "//base/sensors/sensor/test/fuzztest/services:fuzztest",
+        "//base/sensors/sensor/test/unittest/coverage:unittest",
+        "//base/sensors/sensor/test/fuzztest/sensor_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/clientinfo_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/sensoralgorithm_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/sensordataprocesser_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/sensordump_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/geomagneticfield_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/sensorpowerpolicy_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/sensorbasicdatachannel_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/sensorshakecontrol_fuzzer:fuzztest",
+        "//base/sensors/sensor/test/fuzztest/sensormanager_fuzzer:fuzztest"
       ]
     }
   }

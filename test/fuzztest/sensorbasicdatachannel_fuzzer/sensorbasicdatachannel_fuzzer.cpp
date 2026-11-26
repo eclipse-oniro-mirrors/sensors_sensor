@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Huawei Device Co., Ltd.
+ * Copyright (c) 2026 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -67,6 +67,9 @@ SensorData MakeSensorData(int32_t sensorType, float sensorValue)
 
 void RunChannelStateTests(const sptr<SensorBasicDataChannel> &channel)
 {
+    if (channel == nullptr) {
+        return;
+    }
     (void)channel->GetSendDataFd();
     (void)channel->GetReceiveDataFd();
     channel->SetSensorStatus(true);
@@ -88,6 +91,9 @@ void RunChannelStateTests(const sptr<SensorBasicDataChannel> &channel)
 
 void RunSendDataTests(const sptr<SensorBasicDataChannel> &channel, int32_t sensorType, float sensorValue)
 {
+    if (channel == nullptr) {
+        return;
+    }
     SensorData sensorData = MakeSensorData(sensorType, sensorValue);
     channel->SetSensorStatus(true);
     channel->SendData(&sensorData, sizeof(sensorData));
@@ -104,6 +110,9 @@ void RunSendDataTests(const sptr<SensorBasicDataChannel> &channel, int32_t senso
 
 void RunReceiveDataTests(const sptr<SensorBasicDataChannel> &channel, int32_t sensorType, float sensorValue)
 {
+    if (channel == nullptr) {
+        return;
+    }
     SensorData sensorData = MakeSensorData(sensorType, sensorValue);
     channel->SendData(&sensorData, sizeof(sensorData));
 
@@ -117,6 +126,9 @@ void RunReceiveDataTests(const sptr<SensorBasicDataChannel> &channel, int32_t se
 
 void RunBinderAndDestroyTests(const sptr<SensorBasicDataChannel> &channel)
 {
+    if (channel == nullptr) {
+        return;
+    }
     MessageParcel parcel;
     channel->SendToBinder(parcel);
 
@@ -132,57 +144,70 @@ void RunBinderAndDestroyTests(const sptr<SensorBasicDataChannel> &channel)
 void RunCreateFromParcelTests()
 {
     sptr<SensorBasicDataChannel> srcChannel = new (std::nothrow) SensorBasicDataChannel();
-    if (srcChannel != nullptr && srcChannel->CreateSensorBasicChannel() == 0) {
-        MessageParcel parcel;
-        srcChannel->SendToBinder(parcel);
-
-        sptr<SensorBasicDataChannel> dstChannel = new (std::nothrow) SensorBasicDataChannel();
-        if (dstChannel != nullptr) {
-            dstChannel->CreateSensorBasicChannel(parcel);
-            dstChannel->DestroySensorBasicChannel();
-        }
-        srcChannel->DestroySensorBasicChannel();
+    if (srcChannel == nullptr) {
+        return;
     }
+    if (srcChannel->CreateSensorBasicChannel() != 0) {
+        return;
+    }
+    MessageParcel parcel;
+    srcChannel->SendToBinder(parcel);
+
+    sptr<SensorBasicDataChannel> dstChannel = new (std::nothrow) SensorBasicDataChannel();
+    if (dstChannel == nullptr) {
+        srcChannel->DestroySensorBasicChannel();
+        return;
+    }
+    dstChannel->CreateSensorBasicChannel(parcel);
+    dstChannel->DestroySensorBasicChannel();
+    srcChannel->DestroySensorBasicChannel();
 }
 
 void RunCreateBySendFdTests()
 {
     sptr<SensorBasicDataChannel> invalidChannel = new (std::nothrow) SensorBasicDataChannel();
-    if (invalidChannel != nullptr) {
-        invalidChannel->CreateSensorBasicChannelBySendFd(INVALID_FD);
-        invalidChannel->DestroySensorBasicChannel();
+    if (invalidChannel == nullptr) {
+        return;
     }
+    invalidChannel->CreateSensorBasicChannelBySendFd(INVALID_FD);
+    invalidChannel->DestroySensorBasicChannel();
 
     sptr<SensorBasicDataChannel> srcChannel = new (std::nothrow) SensorBasicDataChannel();
-    if (srcChannel != nullptr && srcChannel->CreateSensorBasicChannel() == 0) {
-        int32_t fd = srcChannel->GetSendDataFd();
-        sptr<SensorBasicDataChannel> channel = new (std::nothrow) SensorBasicDataChannel();
-        if (channel != nullptr) {
-            channel->CreateSensorBasicChannelBySendFd(fd);
-            channel->CreateSensorBasicChannelBySendFd(fd + NEXT_SENSOR_OFFSET);
-        }
+    if (srcChannel == nullptr) {
+        return;
     }
+    if (srcChannel->CreateSensorBasicChannel() != 0) {
+        return;
+    }
+    int32_t fd = srcChannel->GetSendDataFd();
+    sptr<SensorBasicDataChannel> channel = new (std::nothrow) SensorBasicDataChannel();
+    if (channel == nullptr) {
+        return;
+    }
+    channel->CreateSensorBasicChannelBySendFd(fd);
+    channel->CreateSensorBasicChannelBySendFd(fd + NEXT_SENSOR_OFFSET);
 }
 
 void RunDefaultStateTests()
 {
     sptr<SensorBasicDataChannel> channel = new (std::nothrow) SensorBasicDataChannel();
-    if (channel != nullptr) {
-        (void)channel->GetSensorStatus();
-        (void)channel->GetPackageName();
-        (void)channel->GetUserId();
-        (void)channel->GetAccessTokenId();
-        (void)channel->GetDataCacheBuf();
-        (void)channel->GetSendDataFd();
-        (void)channel->GetReceiveDataFd();
-
-        SensorData sensorData;
-        (void)memset_s(&sensorData, sizeof(sensorData), 0, sizeof(sensorData));
-        channel->SendData(&sensorData, sizeof(sensorData));
-
-        MessageParcel parcel;
-        channel->SendToBinder(parcel);
+    if (channel == nullptr) {
+        return;
     }
+    (void)channel->GetSensorStatus();
+    (void)channel->GetPackageName();
+    (void)channel->GetUserId();
+    (void)channel->GetAccessTokenId();
+    (void)channel->GetDataCacheBuf();
+    (void)channel->GetSendDataFd();
+    (void)channel->GetReceiveDataFd();
+
+    SensorData sensorData;
+    (void)memset_s(&sensorData, sizeof(sensorData), 0, sizeof(sensorData));
+    channel->SendData(&sensorData, sizeof(sensorData));
+
+    MessageParcel parcel;
+    channel->SendToBinder(parcel);
 }
 
 bool SensorBasicDataChannelFuzzTest(const uint8_t *data, size_t size)

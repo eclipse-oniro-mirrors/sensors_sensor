@@ -106,7 +106,6 @@ int32_t SensorHdiConnection::ConnectSensorTransformHdi()
 
 int32_t SensorHdiConnection::TransformSensorData(uint32_t state, uint32_t policy, SensorData* sensorData)
 {
-    std::lock_guard<std::mutex> sensorLock(sensorMutex_);
     CHKPR(iSensorHdiConnection_, CONNECT_TRANSFORM_ERR);
     CHKPR(sensorData, ERROR);
     if (policy == CONVERT_ROTATION_0 || policy > CONVERT_ROTATION_270) {
